@@ -94,10 +94,10 @@ const cart = {
     const items = this.getItems();
     if (items.length === 0) return { ok: false, motivo: 'empty' };
 
-    const ts      = Date.now();
-    const hash    = ts.toString(36).slice(-4).toUpperCase();
-    const sucursal = this._session?.sucursal ?? 'xx';
-    const id       = `${sucursal}-${ts}-${hash}`;
+    const ts         = Date.now();
+    const hash       = ts.toString(36).slice(-4).toUpperCase();
+    const sucursalId = this._session?.id ?? 'xx';
+    const id         = `${sucursalId}-${ts}-${hash}`;
 
     const order = {
       id,

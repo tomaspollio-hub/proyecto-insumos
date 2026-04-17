@@ -145,10 +145,19 @@ const orderView = {
         </button>
       </div>`;
 
-    _openOverlay('confirm-overlay');
-    document.getElementById('btn-close-success').addEventListener('click', () => {
+    const overlay = _openOverlay('confirm-overlay');
+
+    const closeSuccess = () => {
       this.closeConfirm();
-    });
+      setTimeout(() => document.getElementById('search-input')?.focus(), 320);
+    };
+
+    document.getElementById('btn-close-success').addEventListener('click', closeSuccess);
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeSuccess(); }, { once: true });
+    const onEsc = e => {
+      if (e.key === 'Escape') { closeSuccess(); document.removeEventListener('keydown', onEsc); }
+    };
+    document.addEventListener('keydown', onEsc);
   },
 
   /* ── Historial ────────────────────────────────────────────── */

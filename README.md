@@ -1,129 +1,176 @@
-# Isumos — Sistema de Pedidos Internos para Cadena de Farmacias
+# Isumos — Sistema de Pedidos Internos
 
-Web interna donde cada sucursal arma un carrito de reposición de productos. Diseñada como SPA vanilla (sin frameworks) para máxima portabilidad y facilidad de comprensión.
+Web interna para cadenas de farmacias. Cada sucursal arma su carrito de reposición de productos, envía el pedido y consulta el historial. SPA vanilla sin frameworks — solo HTML, CSS y JS con módulos ES6.
 
 ---
 
 ## Cómo correr localmente
 
-Requiere un servidor HTTP para que los `import` de módulos ES6 y el `fetch` de JSON funcionen correctamente. No abrir `index.html` directamente desde el sistema de archivos.
+Requiere un servidor HTTP local: los módulos ES6 (`import/export`) y `fetch` no funcionan desde `file://`.
 
 ```bash
 # Python 3
-cd "Proyecto Isumos"
+cd proyecto-isumos
 python3 -m http.server 8000
-# → http://localhost:8000/login.html
+# Abrir: http://localhost:8000/login.html
 ```
 
 ```bash
-# Node.js (si tenés npx disponible)
+# Node.js
 npx serve .
+# Abrir la URL que muestra en consola + /login.html
 ```
-
-**Credenciales de prueba:**
-
-| Sucursal | Usuario | Password | Rol |
-|---|---|---|---|
-| Centro | `centro` | `centro123` | encargado |
-| Norte | `norte` | `norte123` | encargado |
-| Sur | `sur` | `sur456` | empleado |
 
 ---
 
-## Estructura de carpetas
+## Credenciales de prueba
+
+| Sucursal         | Usuario  | Contraseña  | Rol       |
+|------------------|----------|-------------|-----------|
+| Sucursal Centro  | `centro` | `centro123` | encargado |
+| Sucursal Norte   | `norte`  | `norte123`  | encargado |
+| Sucursal Sur     | `sur`    | `sur456`    | empleado  |
+
+Los datos de sesión se guardan en `localStorage` bajo la key `isumos_session`. Cada sucursal tiene su carrito e historial aislados (`isumos_cart:{id}` e `isumos_orders:{id}`).
+
+---
+
+## Cómo testear
+
+### Flujo básico
+1. Ir a `http://localhost:8000/login.html`
+2. Ingresar con cualquiera de las credenciales de arriba
+3. Buscar un producto por nombre (ej: "ibuprofeno") o código de barras completo
+4. Agregar al carrito desde el modal del producto o escaneando el código (Enter)
+5. Abrir el carrito (sidebar derecha en desktop / tab inferior en mobile)
+6. Hacer clic en **Revisar pedido** → verificar resumen agrupado por categoría
+7. Hacer clic en **Enviar pedido** → ver pantalla de éxito con JSON del pedido
+8. Hacer clic en **Historial** (ícono reloj en header) → ver pedido guardado
+9. Expandir el pedido → hacer clic en **Repetir este pedido**
+
+### Aislamiento por sucursal
+1. Login como `centro`, agregar productos, enviar pedido
+2. Logout → login como `norte`
+3. Verificar que el carrito y el historial de `norte` están vacíos
+4. El botón **Repetir último pedido** no aparece en `norte` (sin historial propio)
+
+### Casos borde a probar
+- **Múltiplo mínimo**: agregar Tramadol (múltiplo 2) con qty 1 → debe redondearse a 2
+- **Sin stock**: Shampoo Anticaspa (sin_stock) → botón "Agregar" deshabilitado en modal
+- **Producto controlado**: Tramadol → badge rojo "Controlado" en card y modal; aviso en confirmar pedido
+- **Buscador + Enter**: escribir código de barras exacto (ej: `7790040031088`) y presionar Enter → agrega al carrito directo
+
+---
+
+## Estructura de archivos
 
 ```
 /
-├── index.html              # Vista principal (catálogo, carrito, historial)
+├── index.html              # Vista principal (catálogo + carrito + historial)
 ├── login.html              # Pantalla de login
 ├── productos.json          # Catálogo de productos (fuente de datos demo)
-├── usuarios.json           # Credenciales hardcodeadas por sucursal
+├── usuarios.json           # Credenciales por sucursal (etapa 1)
 │
 ├── css/
-│   ├── reset.css           # Normalize mínimo
 │   ├── variables.css       # Design tokens: colores, tipografía, espaciados
-│   ├── layout.css          # Estructura general, sidebar, bottom-sheet
-│   ├── components.css      # Cards, chips, badges, modales, carrito
-│   └── login.css           # Estilos específicos del login
+│   ├── reset.css           # Normalize mínimo
+│   ├── layout.css          # Header, app-body, sidebar carrito, grid responsive
+│   ├── components.css      # Cards, chips, badges, modales, carrito, historial
+│   └── login.css           # Estilos exclusivos de login.html
 │
 ├── js/
-│   ├── app.js              # Orquestador: inicializa módulos, maneja navegación
-│   ├── auth.js             # Login/logout, sesión activa, guard de ruta
+│   ├── auth.js             # Login / logout / requireAuth (guard de ruta)
 │   ├── storage.js          # Capa de abstracción sobre localStorage (API async)
 │   ├── catalog.js          # Carga productos, búsqueda, filtros por categoría
-│   ├── cart.js             # Estado del carrito + reglas de negocio + persistencia
-│   ├── cart-rules.js       # Reglas extraídas: múltiplo mínimo, validaciones
-│   ├── barcode.js          # Comportamiento del scanner USB (autofocus, Enter)
+│   ├── cart.js             # Estado del carrito, reglas de negocio, persistencia
 │   └── views/
-│       ├── catalog-view.js # Render de cards, filtros, modal de producto
-│       ├── cart-view.js    # Render del carrito lateral / bottom-sheet
-│       └── order-view.js   # Render de confirmación, historial, JSON del pedido
+│       ├── catalog-view.js # Render de cards, modal de producto, chips, toasts
+│       ├── cart-view.js    # Render del panel carrito (sidebar / bottom-sheet)
+│       └── order-view.js   # Render de confirmar pedido, éxito e historial
 │
 └── assets/
     └── img/
-        └── productos/      # Imágenes de productos (JPG/PNG, 400x400px aprox.)
+        ├── placeholder.svg         # Fallback para imágenes faltantes
+        └── productos/              # Imágenes de productos (placeholder SVG por ahora)
 ```
 
 ---
 
 ## Arquitectura de módulos
 
-### `storage.js` — capa de abstracción (toda la persistencia pasa por acá)
+### `storage.js` — toda la persistencia pasa por acá
 
-API completamente `async`. Hoy escribe en `localStorage`; mañana reemplaza el cuerpo de cada función con `fetch` sin tocar el resto del código.
+API completamente `async`. Hoy escribe en `localStorage`; en Etapa 2 se reemplaza el cuerpo de cada función con un `fetch` sin tocar el resto del código.
 
 ```js
-await storage.getCart()
-await storage.saveCart(cart)
-await storage.getOrders()
-await storage.saveOrder(order)
+// Carrito aislado por sucursal
+await storage.getCart(sucursalId)
+await storage.saveCart(cart, sucursalId)
+
+// Historial aislado por sucursal
+await storage.getOrders(sucursalId)
+await storage.saveOrder(order, sucursalId)
+
+// Sesión (global, una por dispositivo)
 await storage.getSession()
 await storage.saveSession(data)
 await storage.clearSession()
+
+// Solo para vista centralizada de Etapa 2
+await storage.getAllOrders()
 ```
+
+Keys en `localStorage`:
+- `isumos_session` — sesión activa
+- `isumos_cart:{sucursalId}` — carrito por sucursal (ej: `isumos_cart:suc001`)
+- `isumos_orders:{sucursalId}` — historial por sucursal (ej: `isumos_orders:suc002`)
 
 ### `cart.js` — reglas de negocio + persistencia automática
 
-- `cart.add(sku, qty)` → redondea al múltiplo mínimo, rechaza `sin_stock`
-- `cart.repeatLastOrder()` → recarga el último pedido validando disponibilidad
-- Cada mutación (add/remove/updateQty/clear) persiste automáticamente vía `storage.saveCart()`
+- `cart.add(sku, qty)` → rechaza `sin_stock`; redondea hacia arriba al múltiplo mínimo
+- `cart.updateQty(sku, delta)` → delta ± respetando el múltiplo; elimina si qty ≤ 0
+- `cart.submitOrder()` → genera ID `{sucursalId}-{timestamp}-{hash}`, guarda en historial, limpia carrito
+- `cart.repeatOrder(orderId)` → recarga un pedido anterior validando disponibilidad actual; retorna `{ cargados, omitidos }`
+- Cada mutación persiste automáticamente (nunca hay que llamar a `storage.saveCart` desde afuera)
 
-### `barcode.js` — scanner USB
+### `catalog.js` — búsqueda y filtros
 
-- Autofocus al input de búsqueda al cargar y al cerrar modales/toasts
-- Enter con match exacto de `codigo_barras` → agrega al carrito directo
-- Enter con match parcial → filtra catálogo normalmente
+- `catalog.setCartAdd(fn)` — inyecta el callback del carrito (evita acoplamiento circular)
+- `catalog.onSearch(query)` — filtra por nombre e includes/startsWith de código de barras simultáneamente
+- `catalog.onEnter(query)` — si hay match exacto de código de barras, agrega al carrito directo (hook de scanner USB)
+- Filtros de categoría: OR lógico, multi-seleccionables
 
 ---
 
-## Etapa 2 — Pendiente (migración a backend)
+## Pendiente — Etapa 2
 
-Estos son los únicos archivos que necesitan cambios para conectar a una API real:
+### Migración a backend
 
-### `storage.js`
-Reemplazar cada método `localStorage` por una llamada `fetch` al endpoint correspondiente. El resto del código no se toca.
+El único archivo que cambia en profundidad es `storage.js`. El resto del código no se toca.
 
 ```js
 // Hoy:
-async getCart() {
-  return JSON.parse(localStorage.getItem('isumos_cart')) ?? { items: [] };
+async getOrders(sucursalId) {
+  return JSON.parse(localStorage.getItem(`isumos_orders:${sucursalId}`)) ?? [];
 }
 
-// Mañana:
-async getCart() {
-  const res = await fetch('/api/cart', { headers: authHeaders() });
+// Etapa 2:
+async getOrders(sucursalId) {
+  const res = await fetch(`/api/orders?sucursal=${sucursalId}`, { headers: authHeaders() });
   return res.json();
 }
 ```
 
-### `auth.js`
-Reemplazar la validación contra `usuarios.json` por un POST a `/api/auth/login`. Gestionar JWT o cookie de sesión.
+`auth.js`: reemplazar validación contra `usuarios.json` por POST a `/api/auth/login`. Gestionar JWT o cookie de sesión.
 
-### Pendientes funcionales para Etapa 2
+### Funcionalidades pendientes
+
 - [ ] Backend con base de datos (productos, pedidos, usuarios)
 - [ ] Autenticación real (JWT / sesión server-side)
-- [ ] Roles funcionales: empleado vs. encargado (aprobación de pedidos)
-- [ ] Notificaciones al depósito central cuando llega un pedido
-- [ ] Panel de administración para gestionar el catálogo
-- [ ] Estados del pedido: pendiente → en preparación → despachado → recibido
-- [ ] Integración con sistema de stock
+- [ ] Roles funcionales: empleado no puede enviar sin aprobación de encargado
+- [ ] Estados del pedido: `pendiente → preparando → despachado → recibido`
+- [ ] Panel central del depósito: ver todos los pedidos de todas las sucursales (ya hay `storage.getAllOrders()` preparado)
+- [ ] Notificación al depósito cuando llega un pedido nuevo
+- [ ] Gestión del catálogo desde panel de admin (altas, bajas, cambios de stock)
+- [ ] Integración con sistema de inventario para disponibilidad en tiempo real
+- [ ] Imágenes reales de productos en `assets/img/productos/`
