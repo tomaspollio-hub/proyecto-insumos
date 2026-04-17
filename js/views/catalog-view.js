@@ -96,7 +96,7 @@ const catalogView = {
 
   /* ── Modal ────────────────────────────────────────────────── */
 
-  renderModal(product) {
+  renderModal(product, onAddToCart = null) {
     const isNoStock  = product.disponibilidad === 'sin_stock';
     const availClass = AVAIL_CLASS[product.disponibilidad] ?? 'badge--nostock';
     const availLabel = AVAIL_LABEL[product.disponibilidad] ?? 'Sin stock';
@@ -177,6 +177,24 @@ const catalogView = {
       document.body.classList.remove('modal-open');
       this.focusSearch();
     };
+
+    /* Botón agregar al carrito */
+    if (onAddToCart && !isNoStock) {
+      const addBtn = content.querySelector('.btn-add-cart');
+      if (addBtn) {
+        addBtn.addEventListener('click', async () => {
+          addBtn.disabled = true;
+          const result = await onAddToCart(product.sku_interno, product.multiplo_minimo);
+          if (result.ok) {
+            close();
+            this.showToast(`Agregado: ${product.nombre} — ${result.qty_final} ${product.unidad_pedido}`);
+          } else {
+            addBtn.disabled = false;
+            this.showToast(`Sin stock: ${product.nombre}`);
+          }
+        });
+      }
+    }
 
     closeBtn.addEventListener('click', close);
 

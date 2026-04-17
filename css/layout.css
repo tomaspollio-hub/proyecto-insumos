@@ -182,6 +182,159 @@ body.modal-open { overflow: hidden; }
   .product-grid { grid-template-columns: repeat(6, 1fr); }
 }
 
+/* ── App Body (catálogo + sidebar carrito) ─────────────────────── */
+
+.app-body {
+  /* Mobile: stack vertical; deja espacio al tab del carrito */
+  padding-bottom: calc(64px + var(--space-6));
+}
+
+@media (min-width: 1024px) {
+  .app-body {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-6);
+    max-width: 1640px;
+    margin: 0 auto;
+    padding: var(--space-6) var(--space-6) var(--space-12);
+  }
+
+  /* Dentro del flex, app-main ya no centra solo */
+  .app-body .app-main {
+    flex: 1;
+    min-width: 0;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+/* ── Cart Panel ────────────────────────────────────────────────── */
+
+/* Mobile: bottom-sheet fijo */
+.cart-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  max-height: 85dvh;
+  background: var(--surface);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: 0 -4px 32px rgb(0 0 0 / 0.12);
+  transform: translateY(calc(100% - 64px));
+  transition: transform var(--transition-slow);
+}
+
+.cart-panel.is-open {
+  transform: translateY(0);
+}
+
+/* Desktop: sidebar sticky */
+@media (min-width: 1024px) {
+  .cart-panel {
+    position: sticky;
+    top: var(--header-height);
+    width: var(--sidebar-width);
+    height: calc(100dvh - var(--header-height));
+    flex-shrink: 0;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+    transform: none;
+    transition: none;
+    overflow: hidden;
+  }
+}
+
+/* ── Cart Panel: tab (visible en mobile cuando cerrado) ─────────── */
+
+.cart-panel__tab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-4);
+  height: 64px;
+  cursor: pointer;
+  flex-shrink: 0;
+  user-select: none;
+  border-bottom: 1px solid var(--border);
+}
+
+@media (min-width: 1024px) {
+  .cart-panel__tab { display: none; }
+}
+
+/* ── Cart Panel: inner (header + items + footer) ────────────────── */
+
+.cart-panel__inner {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  /* Mobile: oculto cuando el panel está cerrado — la transform lo esconde */
+}
+
+.cart-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.cart-panel__title {
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+.cart-panel__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.cart-panel__close:hover { background: var(--border); color: var(--text-primary); }
+.cart-panel__close svg { width: 1rem; height: 1rem; }
+
+@media (min-width: 1024px) {
+  .cart-panel__close { display: none; }
+}
+
+/* ── Cart Items (scrollable) ────────────────────────────────────── */
+
+#cart-items {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* ── Cart Footer ────────────────────────────────────────────────── */
+
+.cart-panel__footer {
+  border-top: 1px solid var(--border);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
 /* ── Modal Overlay ─────────────────────────────────────────────── */
 
 .modal-overlay {

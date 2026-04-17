@@ -9,6 +9,7 @@ const catalog = {
   _products:          [],
   _activeCategories:  new Set(),
   _searchQuery:       '',
+  _cartAdd:           null,   /* fn(sku, qty) → Promise<result> — se inyecta desde index.html */
 
   async init() {
     let products;
@@ -36,18 +37,33 @@ const catalog = {
     this._render();
   },
 
-  onEnter(query) {
+  setCartAdd(fn) {
+    this._cartAdd = fn;
+  },
+
+  async onEnter(query) {
     const trimmed = query.trim();
     if (!trimmed) return;
 
     const exact = this._products.find(p => p.codigo_barras === trimmed);
-    if (exact) {
-      // Hook preparado para cart.add() — cart.js no existe aún
+    if (!exact) return;
+
+    if (this._cartAdd) {
+      const result = await this._cartAdd(exact.sku_interno, exact.multiplo_minimo);
+      if (result.ok) {
+        const adj = result.ajustado ? ` (ajustado a múltiplo de ${exact.multiplo_minimo})` : '';
+        catalogView.showToast(`Agregado: ${exact.nombre} — ${result.qty_final} ${exact.unidad_pedido}${adj}`);
+      } else {
+        const motivos = { sin_stock: 'sin stock', not_found: 'no encontrado' };
+        catalogView.showToast(`No se pudo agregar ${exact.nombre}: ${motivos[result.motivo] ?? result.motivo}`);
+      }
+    } else {
       catalogView.showToast(`Producto detectado: ${exact.nombre} — pendiente conectar carrito`);
-      catalogView.clearSearch();
-      this._searchQuery = '';
-      this._render();
     }
+
+    catalogView.clearSearch();
+    this._searchQuery = '';
+    this._render();
   },
 
   _onChipClick(categoria) {
@@ -85,7 +101,10 @@ const catalog = {
   },
 
   _onCardClick(product) {
-    catalogView.renderModal(product);
+    const addFn = this._cartAdd
+      ? async (sku, qty) => this._cartAdd(sku, qty)
+      : null;
+    catalogView.renderModal(product, addFn);
   },
 };
 
