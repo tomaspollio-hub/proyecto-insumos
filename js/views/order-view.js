@@ -31,7 +31,11 @@ function _closeOverlay(id) {
   const overlay = document.getElementById(id);
   overlay.classList.remove('is-open');
   document.body.classList.remove('modal-open');
-  overlay.addEventListener('transitionend', () => { overlay.hidden = true; }, { once: true });
+  overlay.addEventListener('transitionend', () => {
+    /* Guard: si alguien re-abrió el overlay (ej: renderSuccess) antes de que
+       terminara la transición de cierre, no lo ocultamos. */
+    if (!overlay.classList.contains('is-open')) overlay.hidden = true;
+  }, { once: true });
 }
 
 function _bindClose(overlayId, btnId, selfRef) {
