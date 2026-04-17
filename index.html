@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Catálogo — Isumos Farmacias</title>
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/reset.css" />
+  <link rel="stylesheet" href="css/layout.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <!-- ── Header ──────────────────────────────────────────────── -->
+  <header class="app-header">
+    <div class="app-header__inner">
+      <div class="app-header__brand">
+        <svg class="app-header__logo" xmlns="http://www.w3.org/2000/svg" fill="none"
+             viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M12 3v2m0 14v2M5.636 5.636l1.414 1.414m9.9 9.9 1.414 1.414M3 12h2m14 0h2M5.636 18.364l1.414-1.414M16.95 7.05l1.414-1.414M9 12a3 3 0 1 1 6 0 3 3 0 0 1-6 0Z" />
+        </svg>
+        <span class="app-header__title">Isumos</span>
+      </div>
+
+      <div class="app-header__meta">
+        <span id="header-sucursal" class="header-sucursal"></span>
+        <button id="btn-logout" class="btn-logout" type="button">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+               stroke-width="2" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l-3 3m0 0 3 3m-3-3h12.75" />
+          </svg>
+          Cerrar sesión
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Main ────────────────────────────────────────────────── -->
+  <main class="app-main">
+
+    <!-- Buscador -->
+    <div class="search-bar">
+      <label for="search-input" class="sr-only">Buscar producto</label>
+      <div class="search-bar__wrap">
+        <svg class="search-bar__icon" xmlns="http://www.w3.org/2000/svg" fill="none"
+             viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+        </svg>
+        <input
+          id="search-input"
+          class="search-bar__input"
+          type="search"
+          placeholder="Buscar por nombre o código de barras…"
+          autocomplete="off"
+          spellcheck="false"
+          autofocus
+        />
+      </div>
+    </div>
+
+    <!-- Chips de categoría -->
+    <div id="category-chips" class="chips-bar" role="group" aria-label="Filtrar por categoría"></div>
+
+    <!-- Contador de resultados -->
+    <p id="results-count" class="results-count" aria-live="polite" aria-atomic="true"></p>
+
+    <!-- Grid de productos -->
+    <div id="product-grid" class="product-grid" role="list"></div>
+
+  </main>
+
+  <!-- ── Modal ────────────────────────────────────────────────── -->
+  <div id="modal-overlay" class="modal-overlay" hidden aria-modal="true" role="dialog">
+    <div id="modal-content" class="modal"></div>
+  </div>
+
+  <!-- ── Toasts ───────────────────────────────────────────────── -->
+  <div id="toast-container" class="toast-container" role="status" aria-live="polite"></div>
+
+  <script type="module">
+    import auth    from './js/auth.js';
+    import catalog from './js/catalog.js';
+
+    const session = await auth.requireAuth();
+    if (!session) throw new Error('Sin sesión');
+
+    /* Header */
+    document.getElementById('header-sucursal').textContent = session.sucursal;
+    document.getElementById('btn-logout').addEventListener('click', () => auth.logout());
+
+    /* Buscador */
+    const searchInput = document.getElementById('search-input');
+    searchInput.addEventListener('input',   e => catalog.onSearch(e.target.value));
+    searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') catalog.onEnter(e.target.value); });
+
+    await catalog.init();
+  </script>
+
+</body>
+</html>
