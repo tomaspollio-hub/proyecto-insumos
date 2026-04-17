@@ -17,7 +17,7 @@ const cart = {
     const list = await res.json();
     this._products = Object.fromEntries(list.map(p => [p.sku_interno, p]));
 
-    const saved = await storage.getCart();
+    const saved = await storage.getCart(session.id);
     this._items = saved.items ?? [];
   },
 
@@ -101,9 +101,11 @@ const cart = {
 
     const order = {
       id,
-      sucursal: this._session?.sucursal,
-      usuario:  this._session?.usuario,
-      fecha:    new Date().toISOString(),
+      sucursal_id:     this._session?.id,
+      sucursal_nombre: this._session?.sucursal,
+      usuario:         this._session?.usuario,
+      rol:             this._session?.rol,
+      fecha:           new Date().toISOString(),
       items: items.map(i => ({
         sku:           i.sku,
         nombre:        i.product.nombre,
@@ -115,7 +117,7 @@ const cart = {
       })),
     };
 
-    await storage.saveOrder(order);
+    await storage.saveOrder(order, this._session.id);
     await this.clear();
     return { ok: true, order };
   },
@@ -123,7 +125,7 @@ const cart = {
   /* ── Repetir pedido ───────────────────────────────────────── */
 
   async repeatOrder(orderId) {
-    const orders = await storage.getOrders();
+    const orders = await storage.getOrders(this._session.id);
     const order  = orderId ? orders.find(o => o.id === orderId) : orders[0];
     if (!order) return { ok: false, motivo: 'not_found' };
 
@@ -150,7 +152,7 @@ const cart = {
   },
 
   async _persist() {
-    await storage.saveCart({ items: this._items });
+    await storage.saveCart({ items: this._items }, this._session.id);
   },
 };
 

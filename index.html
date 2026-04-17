@@ -224,7 +224,7 @@
 
     /* ── Repetir último pedido ────────────────────────────────── */
     const btnRepeatLast = document.getElementById('btn-repeat-last');
-    const savedOrders   = await storage.getOrders();
+    const savedOrders   = await storage.getOrders(session.id);
     if (savedOrders.length > 0) btnRepeatLast.hidden = false;
 
     btnRepeatLast.addEventListener('click', async () => {
@@ -240,7 +240,7 @@
 
     /* ── Historial ────────────────────────────────────────────── */
     document.getElementById('btn-history').addEventListener('click', async () => {
-      const orders = await storage.getOrders();
+      const orders = await storage.getOrders(session.id);
       orderView.renderHistory(orders, async (orderId) => {
         const result = await cart.repeatOrder(orderId);
         orderView.closeHistory();

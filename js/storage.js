@@ -10,36 +10,59 @@
  */
 
 const KEYS = {
-  CART:    'isumos_cart',
-  ORDERS:  'isumos_orders',
+  CART:    sucursalId => `isumos_cart:${sucursalId}`,
+  ORDERS:  sucursalId => `isumos_orders:${sucursalId}`,
   SESSION: 'isumos_session',
 };
+
+/* Avisa una sola vez si quedan datos de la key global legada */
+let _legacyOrdersWarned = false;
+function _checkLegacyOrders() {
+  if (!_legacyOrdersWarned && localStorage.getItem('isumos_orders') !== null) {
+    console.warn('[storage] Clave isumos_orders global detectada — legado, ignorada');
+    _legacyOrdersWarned = true;
+  }
+}
 
 const storage = {
 
   /* ── Carrito ──────────────────────────────────────────────── */
 
-  async getCart() {
-    const raw = localStorage.getItem(KEYS.CART);
+  async getCart(sucursalId) {
+    const raw = localStorage.getItem(KEYS.CART(sucursalId));
     return raw ? JSON.parse(raw) : { items: [] };
   },
 
-  async saveCart(cart) {
-    localStorage.setItem(KEYS.CART, JSON.stringify(cart));
+  async saveCart(cart, sucursalId) {
+    localStorage.setItem(KEYS.CART(sucursalId), JSON.stringify(cart));
   },
 
-  /* ── Historial de pedidos ─────────────────────────────────── */
+  /* ── Historial de pedidos (por sucursal) ──────────────────── */
 
-  async getOrders() {
-    const raw = localStorage.getItem(KEYS.ORDERS);
+  async getOrders(sucursalId) {
+    _checkLegacyOrders();
+    const raw = localStorage.getItem(KEYS.ORDERS(sucursalId));
     return raw ? JSON.parse(raw) : [];
   },
 
-  async saveOrder(order) {
-    const orders = await storage.getOrders();
+  async saveOrder(order, sucursalId) {
+    const orders = await storage.getOrders(sucursalId);
     orders.unshift(order);
-    localStorage.setItem(KEYS.ORDERS, JSON.stringify(orders));
+    localStorage.setItem(KEYS.ORDERS(sucursalId), JSON.stringify(orders));
     return order;
+  },
+
+  /* TODO: usar solo en vista centralizada de etapa 2, no en UI de sucursal */
+  async getAllOrders() {
+    const allKeys = Object.keys(localStorage).filter(k => k.startsWith('isumos_orders:'));
+    const all = [];
+    for (const key of allKeys) {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(key));
+        if (Array.isArray(parsed)) all.push(...parsed);
+      } catch { /* key corrupta, ignorar */ }
+    }
+    return all.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
   },
 
   /* ── Sesión ───────────────────────────────────────────────── */
