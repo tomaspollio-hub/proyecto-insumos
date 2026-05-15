@@ -20,9 +20,10 @@ import jwt
 from flask import Flask, Response, g, jsonify, request, send_from_directory, stream_with_context
 from werkzeug.security import check_password_hash, generate_password_hash
 
-BASE_DIR     = Path(__file__).parent.parent
-DB_PATH      = Path(__file__).parent / 'isumos.db'
-UPLOADS_DIR  = Path(__file__).parent / 'uploads'
+BASE_DIR          = Path(__file__).parent.parent
+DB_PATH           = Path(__file__).parent / 'isumos.db'
+UPLOADS_DIR       = Path(__file__).parent / 'uploads'
+PRODUCTOS_IMG_DIR = BASE_DIR / 'assets' / 'img' / 'productos'
 SECRET_KEY   = os.environ.get('ISUMOS_SECRET', 'dev-secret-change-in-prod')
 TOKEN_TTL    = int(os.environ.get('ISUMOS_TOKEN_TTL', 86400))
 
@@ -410,7 +411,8 @@ def get_products():
 def update_product(sku):
     data    = request.get_json(silent=True) or {}
     allowed = {'disponibilidad', 'multiplo_minimo', 'nombre', 'descripcion',
-               'tiempo_entrega_stock', 'tiempo_entrega_sin_stock'}
+               'tiempo_entrega_stock', 'tiempo_entrega_sin_stock',
+               'categoria', 'presentacion'}
     updates = {k: v for k, v in data.items() if k in allowed}
     if not updates:
         return jsonify({'ok': False, 'motivo': 'sin_campos'}), 400
@@ -440,6 +442,57 @@ def export_products():
         mimetype='text/csv; charset=utf-8',
         headers={'Content-Disposition': 'attachment; filename="catalogo.csv"'}
     )
+
+@app.post('/api/products/imagenes-bulk')
+@require_auth(roles=['deposito', 'ventas', 'gerente'])
+def upload_product_images_bulk():
+    files = request.files.getlist('imagenes')
+    if not files:
+        return jsonify({'ok': False, 'motivo': 'sin_archivos'}), 400
+    PRODUCTOS_IMG_DIR.mkdir(parents=True, exist_ok=True)
+    db      = get_db()
+    ok      = []
+    sin_match = []
+    ALLOWED  = {'.jpg', '.jpeg', '.png', '.webp'}
+    for f in files:
+        ext  = Path(f.filename).suffix.lower()
+        stem = Path(f.filename).stem
+        if ext not in ALLOWED:
+            sin_match.append(f.filename)
+            continue
+        row = db.execute('SELECT sku_interno FROM productos WHERE codigo_barras=?', (stem,)).fetchone()
+        if not row:
+            sin_match.append(f.filename)
+            continue
+        dest = PRODUCTOS_IMG_DIR / f'{stem}{ext}'
+        f.save(dest)
+        img_path = f'assets/img/productos/{stem}{ext}'
+        db.execute('UPDATE productos SET imagen=? WHERE codigo_barras=?', (img_path, stem))
+        ok.append(f.filename)
+    db.commit()
+    return jsonify({'ok': True, 'guardadas': len(ok), 'sin_match': sin_match})
+
+@app.post('/api/products/<sku>/imagen')
+@require_auth(roles=['deposito', 'ventas', 'gerente'])
+def upload_product_image(sku):
+    db      = get_db()
+    product = db.execute('SELECT * FROM productos WHERE sku_interno=?', (sku,)).fetchone()
+    if not product:
+        return jsonify({'ok': False, 'motivo': 'not_found'}), 404
+    f = request.files.get('imagen')
+    if not f:
+        return jsonify({'ok': False, 'motivo': 'sin_archivo'}), 400
+    ext = Path(f.filename).suffix.lower()
+    if ext not in {'.jpg', '.jpeg', '.png', '.webp'}:
+        return jsonify({'ok': False, 'motivo': 'formato_invalido'}), 400
+    PRODUCTOS_IMG_DIR.mkdir(parents=True, exist_ok=True)
+    barcode  = product['codigo_barras'] or sku
+    filename = f'{barcode}{ext}'
+    f.save(PRODUCTOS_IMG_DIR / filename)
+    img_path = f'assets/img/productos/{filename}'
+    db.execute('UPDATE productos SET imagen=? WHERE sku_interno=?', (img_path, sku))
+    db.commit()
+    return jsonify({'ok': True, 'imagen': img_path})
 
 @app.post('/api/products/import')
 @require_auth(roles=['deposito', 'ventas', 'gerente'])
