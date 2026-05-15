@@ -408,51 +408,72 @@
       const sku = ov.dataset.sku;
       const btn = document.getElementById('btn-guardar-edit');
       const msg = document.getElementById('emod-msg');
-      btn.disabled = true; btn.textContent = 'Guardando…';
+
+      const reset = (text = 'Guardar') => { btn.disabled = false; btn.textContent = text; };
+      const showErr = (txt) => { msg.style.color = 'var(--danger)'; msg.textContent = txt; };
+      const showOk  = (txt) => { msg.style.color = 'var(--success)'; msg.textContent = txt; };
+
+      btn.disabled = true; btn.textContent = 'Guardando…'; msg.textContent = '';
 
       const payload = {
-        nombre:                    document.getElementById('emod-nombre').value.trim(),
-        presentacion:              document.getElementById('emod-presentacion').value.trim(),
-        categoria:                 document.getElementById('emod-categoria').value.trim(),
-        descripcion:               document.getElementById('emod-descripcion').value.trim(),
-        disponibilidad:            document.getElementById('emod-disp').value,
-        multiplo_minimo:           parseInt(document.getElementById('emod-multiplo').value) || 1,
-        tiempo_entrega_stock:      document.getElementById('emod-te-stock').value.trim(),
-        tiempo_entrega_sin_stock:  document.getElementById('emod-te-sinstock').value.trim(),
+        nombre:                   document.getElementById('emod-nombre').value.trim(),
+        presentacion:             document.getElementById('emod-presentacion').value.trim(),
+        categoria:                document.getElementById('emod-categoria').value.trim(),
+        descripcion:              document.getElementById('emod-descripcion').value.trim(),
+        disponibilidad:           document.getElementById('emod-disp').value,
+        multiplo_minimo:          parseInt(document.getElementById('emod-multiplo').value) || 1,
+        tiempo_entrega_stock:     document.getElementById('emod-te-stock').value.trim(),
+        tiempo_entrega_sin_stock: document.getElementById('emod-te-sinstock').value.trim(),
       };
 
-      // 1) Guardar campos de texto
-      const r = await fetch(`/api/products/${sku}`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const d = await r.json();
-      if (!d.ok) { msg.style.color='var(--danger)'; msg.textContent='Error al guardar.'; btn.disabled=false; btn.textContent='Guardar'; return; }
-
-      // 2) Si hay imagen nueva, subirla
-      const imgFile = document.getElementById('emod-img-file').files[0];
-      if (imgFile) {
-        const form = new FormData();
-        form.append('imagen', imgFile);
-        const ri = await fetch(`/api/products/${sku}/imagen`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          body: form,
+      try {
+        // 1) Guardar campos de texto
+        const r = await fetch(`/api/products/${sku}`, {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
         });
-        const di = await ri.json();
-        if (di.ok) {
-          const prod = products.find(p => p.sku_interno === sku);
-          if (prod) prod.imagen = di.imagen;
-        }
-      }
+        if (!r.ok) { showErr(`Error del servidor (${r.status})`); reset(); return; }
+        const d = await r.json();
+        if (!d.ok) { showErr('No se pudo guardar.'); reset(); return; }
 
-      // Actualizar array local y re-render
-      const prod = products.find(p => p.sku_interno === sku);
-      if (prod) Object.assign(prod, payload);
-      msg.style.color = 'var(--success)'; msg.textContent = '✓ Guardado';
-      setTimeout(() => { closeEditModal(); render(); }, 800);
-      btn.disabled = false; btn.textContent = 'Guardar';
+        // 2) Si hay imagen nueva, subirla
+        const imgFile = document.getElementById('emod-img-file').files[0];
+        if (imgFile) {
+          btn.textContent = 'Subiendo imagen…';
+          const form = new FormData();
+          form.append('imagen', imgFile);
+          const ri = await fetch(`/api/products/${sku}/imagen`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: form,
+          });
+          if (ri.ok) {
+            const di = await ri.json();
+            if (di.ok) {
+              const prod = products.find(p => p.sku_interno === sku);
+              if (prod) prod.imagen = di.imagen;
+            } else {
+              showErr('Datos guardados, pero falló la imagen.');
+              reset(); return;
+            }
+          } else {
+            showErr(`Datos guardados, pero error al subir imagen (${ri.status}).`);
+            reset(); return;
+          }
+        }
+
+        // Éxito total
+        const prod = products.find(p => p.sku_interno === sku);
+        if (prod) Object.assign(prod, payload);
+        showOk('✓ Guardado correctamente');
+        reset();
+        setTimeout(() => { closeEditModal(); render(); }, 900);
+
+      } catch (err) {
+        showErr('Error de conexión. Revisá que el servidor esté corriendo.');
+        reset();
+      }
     });
 
     document.getElementById('search').addEventListener('input', render);
