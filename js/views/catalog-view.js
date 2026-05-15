@@ -70,7 +70,7 @@ const catalogView = {
     return `
       <article class="product-card" tabindex="0" role="listitem" aria-label="${this._esc(p.nombre)}">
         <div class="product-card__img-wrap">
-          <img src="${this._esc(p.imagen)}"
+          <img src="${p.imagen || 'assets/img/placeholder.svg'}"
                alt="${this._esc(p.nombre)}"
                class="product-card__img"
                onerror="this.src='assets/img/placeholder.svg';this.onerror=null;"
@@ -113,7 +113,7 @@ const catalogView = {
       </button>
 
       <div class="modal__img-wrap">
-        <img src="${this._esc(product.imagen)}"
+        <img src="${product.imagen || 'assets/img/placeholder.svg'}"
              alt="${this._esc(product.nombre)}"
              class="modal__img"
              onerror="this.src='assets/img/placeholder.svg';this.onerror=null;" />

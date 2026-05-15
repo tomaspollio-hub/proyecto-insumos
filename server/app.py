@@ -365,8 +365,31 @@ def require_auth(roles=None):
 # MÓDULO INTERNO (sin cambios)
 # ══════════════════════════════════════════════════════════════════════════════
 
+# ── Rate limiter en memoria (login) ──────────────────────────────────────────
+_login_attempts: dict = {}   # ip -> [timestamp, ...]
+_RATE_LIMIT_MAX    = 5
+_RATE_LIMIT_WINDOW = 900     # 15 minutos en segundos
+
+def _check_rate_limit(ip: str) -> bool:
+    """Devuelve True si la IP está bloqueada."""
+    now   = datetime.now(timezone.utc).timestamp()
+    times = [t for t in _login_attempts.get(ip, []) if now - t < _RATE_LIMIT_WINDOW]
+    _login_attempts[ip] = times
+    return len(times) >= _RATE_LIMIT_MAX
+
+def _record_failed_attempt(ip: str):
+    now = datetime.now(timezone.utc).timestamp()
+    _login_attempts.setdefault(ip, []).append(now)
+
+def _clear_attempts(ip: str):
+    _login_attempts.pop(ip, None)
+
 @app.post('/api/auth/login')
 def login():
+    ip       = request.remote_addr or '0.0.0.0'
+    if _check_rate_limit(ip):
+        return jsonify({'ok': False, 'motivo': 'demasiados_intentos'}), 429
+
     data     = request.get_json(silent=True) or {}
     usuario  = data.get('usuario', '').strip()
     password = data.get('password', '').strip()
@@ -375,7 +398,10 @@ def login():
 
     row = get_db().execute('SELECT * FROM usuarios WHERE usuario=?', (usuario,)).fetchone()
     if not row or not check_password_hash(row['password_hash'], password):
+        _record_failed_attempt(ip)
         return jsonify({'ok': False, 'motivo': 'credenciales_invalidas'}), 401
+
+    _clear_attempts(ip)
 
     rol = row['rol']
     # Para clientes: id = empresa_id (para que funcione como "sucursal_id" en el frontend)
@@ -398,6 +424,15 @@ def login():
 def logout():
     return jsonify({'ok': True})
 
+@app.post('/api/auth/refresh')
+@require_auth()
+def refresh_token():
+    """Renueva el token JWT manteniendo los mismos datos de sesión."""
+    session = g.session.copy()
+    session.pop('exp', None)
+    session.pop('iat', None)
+    return jsonify({'ok': True, 'token': _make_token(session)})
+
 # ── Productos ─────────────────────────────────────────────────────────────────
 
 @app.get('/api/products')
@@ -405,6 +440,28 @@ def logout():
 def get_products():
     rows = get_db().execute('SELECT * FROM productos').fetchall()
     return jsonify([dict(r) for r in rows])
+
+@app.get('/api/products/demanda')
+@require_auth(roles=['deposito', 'ventas', 'gerente'])
+def get_demanda():
+    """Conteo de pedidos por SKU en los últimos 30 días."""
+    db   = get_db()
+    dias = int(request.args.get('dias', 30))
+    desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+    pedidos = db.execute(
+        "SELECT items FROM pedidos WHERE fecha >= ? AND estado != 'cancelado'", (desde,)
+    ).fetchall()
+    conteo: dict = {}
+    for row in pedidos:
+        try:
+            items = json.loads(row['items'])
+            for item in items:
+                sku = item.get('sku') or item.get('sku_interno')
+                if sku:
+                    conteo[sku] = conteo.get(sku, 0) + item.get('qty', 1)
+        except Exception:
+            pass
+    return jsonify(conteo)
 
 @app.patch('/api/products/<sku>')
 @require_auth(roles=['deposito', 'ventas', 'gerente'])

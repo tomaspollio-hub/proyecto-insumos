@@ -141,6 +141,7 @@
         setLoading(false);
         const mensajes = {
           credenciales_invalidas: 'Usuario o contraseña incorrectos.',
+          demasiados_intentos:   'Demasiados intentos fallidos. Esperá 15 minutos.',
           error_servidor: 'No se pudo conectar. Intentá de nuevo.',
         };
         showError(mensajes[result.motivo] ?? 'Error inesperado.');

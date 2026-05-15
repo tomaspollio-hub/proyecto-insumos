@@ -261,10 +261,14 @@
     }
     document.getElementById('btn-logout').addEventListener('click', () => auth.logout());
 
-    // ── Cargar productos ────────────────────────────────────────
+    // ── Cargar productos + demanda ──────────────────────────────
     const token = sessionStorage.getItem('isumos_token');
-    const res = await fetch('/api/products', { headers: { Authorization: `Bearer ${token}` } });
+    const [res, resD] = await Promise.all([
+      fetch('/api/products',        { headers: { Authorization: `Bearer ${token}` } }),
+      fetch('/api/products/demanda', { headers: { Authorization: `Bearer ${token}` } }),
+    ]);
     let products = await res.json();
+    let demanda  = await resD.json();   // { sku: qty_total_30d }
 
     // Poblar select de categorías
     const cats = [...new Set(products.map(p => p.categoria))].sort();
@@ -308,6 +312,7 @@
                 <td class="sku-cell">${p.sku_interno}</td>
                 <td class="nombre-cell">
                   ${p.imagen ? `<img src="${p.imagen}" style="width:32px;height:32px;object-fit:contain;border-radius:4px;border:1px solid var(--border);vertical-align:middle;margin-right:6px">` : ''}${p.nombre}
+                  ${(demanda[p.sku_interno] ?? 0) >= 10 ? `<span title="${demanda[p.sku_interno]} unidades pedidas (últimos 30 días)" style="margin-left:6px;font-size:10px;font-weight:700;background:#fef3c7;color:#d97706;border:1px solid #fde68a;border-radius:4px;padding:1px 5px;vertical-align:middle">↑ Alta rotación</span>` : ''}
                 </td>
                 <td class="cat-cell">${p.categoria ?? ''}</td>
                 <td>
@@ -541,8 +546,12 @@
       if (data.ok) {
         res.style.color = 'var(--success)';
         res.textContent = `✓ Creados: ${data.creados} · Actualizados: ${data.actualizados} · Errores: ${data.errores}`;
-        const pr = await fetch('/api/products', { headers: { Authorization: `Bearer ${token}` } });
+        const [pr, prd] = await Promise.all([
+          fetch('/api/products',         { headers: { Authorization: `Bearer ${token}` } }),
+          fetch('/api/products/demanda', { headers: { Authorization: `Bearer ${token}` } }),
+        ]);
         products = await pr.json();
+        demanda  = await prd.json();
         render();
       } else {
         res.style.color = 'var(--danger)';
