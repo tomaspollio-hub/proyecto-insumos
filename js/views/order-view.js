@@ -174,7 +174,7 @@ const orderView = {
 
   /* ── Historial ────────────────────────────────────────────── */
 
-  renderHistory(orders, { onRepeat, onApprove, onReject, pendingApproval = [] } = {}) {
+  renderHistory(orders, { onRepeat, onApprove, onReject, pendingApproval = [], onFilter } = {}) {
     const modal = document.getElementById('history-modal');
 
     const ESTADO_LABELS = {
@@ -213,10 +213,37 @@ const orderView = {
         }).join('')}
       </div>` : '';
 
+    const filterBar = onFilter ? `
+      <div class="history-filters" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:16px;padding:12px;background:var(--bg-subtle);border-radius:var(--radius);border:1px solid var(--border)">
+        <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:120px">
+          <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em">Desde</label>
+          <input type="date" id="hist-desde" style="padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;font-family:inherit;background:var(--surface)">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:120px">
+          <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em">Hasta</label>
+          <input type="date" id="hist-hasta" style="padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;font-family:inherit;background:var(--surface)">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:140px">
+          <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em">Estado</label>
+          <select id="hist-estado" style="padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;font-family:inherit;background:var(--surface)">
+            <option value="">Todos</option>
+            <option value="pendiente_aprobacion">Esperando aprobación</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="preparando">Preparando</option>
+            <option value="despachado">Despachado</option>
+            <option value="recibido">Recibido</option>
+            <option value="rechazado">Rechazado</option>
+          </select>
+        </div>
+        <button id="hist-filtrar" style="padding:7px 16px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;align-self:flex-end">Filtrar</button>
+        <button id="hist-limpiar" style="padding:7px 12px;background:none;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text-secondary);cursor:pointer;align-self:flex-end">Limpiar</button>
+      </div>` : '';
+
     modal.innerHTML = `
       <button class="modal__close" id="history-close" aria-label="Cerrar">${ICON_CLOSE}</button>
       <div class="modal__body">
         <h2 class="modal__title">Historial de pedidos</h2>
+        ${filterBar}
         ${approvalSection}
         ${orders.length === 0
           ? '<p class="empty-state" style="padding:var(--space-10) 0">No hay pedidos anteriores.</p>'
@@ -257,6 +284,24 @@ const orderView = {
 
     _openOverlay('history-overlay');
     _bindClose('history-overlay', 'history-close', this);
+
+    if (onFilter) {
+      const btnFiltrar = document.getElementById('hist-filtrar');
+      const btnLimpiar = document.getElementById('hist-limpiar');
+      btnFiltrar?.addEventListener('click', () => {
+        onFilter({
+          desde:  document.getElementById('hist-desde').value  || undefined,
+          hasta:  document.getElementById('hist-hasta').value  || undefined,
+          estado: document.getElementById('hist-estado').value || undefined,
+        });
+      });
+      btnLimpiar?.addEventListener('click', () => {
+        document.getElementById('hist-desde').value  = '';
+        document.getElementById('hist-hasta').value  = '';
+        document.getElementById('hist-estado').value = '';
+        onFilter({});
+      });
+    }
 
     modal.querySelectorAll('.btn-repeat-order').forEach(btn => {
       btn.addEventListener('click', () => onRepeat?.(btn.dataset.orderId));

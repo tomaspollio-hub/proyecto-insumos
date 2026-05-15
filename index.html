@@ -259,9 +259,11 @@
     await refreshApprovalBadge();
 
     /* ── Historial ────────────────────────────────────────────── */
-    btnHistory.addEventListener('click', async () => {
-      const orders = await storage.getOrders(session.id);
-      orderView.renderHistory(orders, {
+    btnHistory.addEventListener('click', () => openHistory({}));
+
+    async function openHistory(filters = {}) {
+      const orders = await storage.getOrders(session.id, filters);
+      const callbacks = {
         onRepeat: async (orderId) => {
           const result = await cart.repeatOrder(orderId);
           orderView.closeHistory();
@@ -276,22 +278,24 @@
         onApprove: session.rol === 'encargado' ? async (orderId) => {
           await storage.approveOrder(orderId);
           pendingApproval = pendingApproval.filter(o => o.id !== orderId);
-          const orders2 = await storage.getOrders(session.id);
-          orderView.renderHistory(orders2, arguments.callee.__callbacks);
+          const orders2 = await storage.getOrders(session.id, filters);
+          orderView.renderHistory(orders2, { ...callbacks, pendingApproval });
           refreshApprovalBadge();
           catalogView.showToast('Pedido aprobado — pasó al depósito');
         } : undefined,
         onReject: session.rol === 'encargado' ? async (orderId) => {
           await storage.rejectOrder(orderId);
           pendingApproval = pendingApproval.filter(o => o.id !== orderId);
-          const orders2 = await storage.getOrders(session.id);
-          orderView.renderHistory(orders2, arguments.callee.__callbacks);
+          const orders2 = await storage.getOrders(session.id, filters);
+          orderView.renderHistory(orders2, { ...callbacks, pendingApproval });
           refreshApprovalBadge();
           catalogView.showToast('Pedido rechazado');
         } : undefined,
         pendingApproval: session.rol === 'encargado' ? pendingApproval : [],
-      });
-    });
+        onFilter: (newFilters) => openHistory(newFilters),
+      };
+      orderView.renderHistory(orders, callbacks);
+    }
 
     /* ── SSE: actualizaciones en tiempo real ──────────────────── */
     const ESTADO_LABELS = {

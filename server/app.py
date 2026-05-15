@@ -638,9 +638,16 @@ def get_orders():
     session     = g.session
     if session['rol'] not in ('deposito',) and session['id'] != sucursal_id:
         return jsonify({'ok': False, 'motivo': 'sin_permiso'}), 403
-    rows = get_db().execute(
-        'SELECT * FROM pedidos WHERE sucursal_id=? ORDER BY fecha DESC', (sucursal_id,)
-    ).fetchall()
+    query  = 'SELECT * FROM pedidos WHERE sucursal_id=?'
+    params = [sucursal_id]
+    if estado := request.args.get('estado'):
+        query += ' AND estado=?'; params.append(estado)
+    if desde := request.args.get('desde'):
+        query += ' AND fecha>=?'; params.append(desde)
+    if hasta := request.args.get('hasta'):
+        query += ' AND fecha<=?'; params.append(hasta + 'T23:59:59')
+    query += ' ORDER BY fecha DESC'
+    rows = get_db().execute(query, params).fetchall()
     return jsonify([_row_to_order(r) for r in rows])
 
 @app.get('/api/orders/pending-approval')
@@ -697,11 +704,16 @@ def create_order():
 @app.get('/api/orders/all')
 @require_auth(roles=['deposito', 'gerente'])
 def get_all_orders():
-    estado = request.args.get('estado')
-    query, params = 'SELECT * FROM pedidos', []
-    if estado:
-        query += ' WHERE estado=?'
-        params.append(estado)
+    conditions, params = [], []
+    if estado := request.args.get('estado'):
+        conditions.append('estado=?'); params.append(estado)
+    if desde := request.args.get('desde'):
+        conditions.append('fecha>=?'); params.append(desde)
+    if hasta := request.args.get('hasta'):
+        conditions.append('fecha<=?'); params.append(hasta + 'T23:59:59')
+    query = 'SELECT * FROM pedidos'
+    if conditions:
+        query += ' WHERE ' + ' AND '.join(conditions)
     query += ' ORDER BY fecha DESC'
     return jsonify([_row_to_order(r) for r in get_db().execute(query, params).fetchall()])
 

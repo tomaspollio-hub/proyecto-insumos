@@ -1017,3 +1017,50 @@
   display: flex; align-items: center; justify-content: center;
   padding: 0 3px; line-height: 1;
 }
+
+/* ── Responsive global ──────────────────────────────────────────── */
+
+/* Tablas con scroll horizontal en móvil */
+.table-scroll-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* Headers con logo + título que se adaptan a pantalla chica */
+@media (max-width: 600px) {
+  /* Logo más pequeño en headers de páginas internas */
+  .header__logo img,
+  .header img[src*="logo"] { height: 30px !important; }
+
+  /* Ocultar subtítulo de sección en móvil si hay poco espacio */
+  .header__title { display: none; }
+
+  /* Botones de nav más compactos */
+  .btn-nav, .btn-back {
+    font-size: 12px !important;
+    padding: 4px 8px !important;
+  }
+}
+
+/* Portal: catálogo + sidebar → stack en móvil */
+@media (max-width: 900px) {
+  .portal-layout {
+    flex-direction: column !important;
+  }
+  .portal-sidebar {
+    position: static !important;
+    width: 100% !important;
+    max-height: 320px;
+    border-left: none !important;
+    border-top: 1px solid var(--border);
+  }
+}
+
+/* Login card más compacta en móvil */
+@media (max-width: 480px) {
+  .login-card { padding: var(--space-6) var(--space-5) !important; }
+}
+
+/* Modal historial: filtros apilados en móvil */
+@media (max-width: 560px) {
+  .history-filters { flex-direction: column !important; }
+  .history-filters > div,
+  .history-filters > button { width: 100% !important; min-width: unset !important; }
+}

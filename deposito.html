@@ -156,7 +156,8 @@
     }
     .order-card.is-open .order-card__body { display: block; }
 
-    .items-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+    .items-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .items-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); min-width: 320px; }
     .items-table th {
       text-align: left; font-size: var(--text-xs); font-weight: var(--font-semibold);
       color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em;
@@ -372,12 +373,12 @@
             </svg>
           </div>
           <div class="order-card__body">
-            <table class="items-table">
+            <div class="items-table-wrap"><table class="items-table">
               <thead><tr>
                 <th>Producto</th><th>Presentación</th><th>Categoría</th><th style="text-align:right">Cantidad</th>
               </tr></thead>
               <tbody>${rows}</tbody>
-            </table>
+            </table></div>
           </div>
         </div>`;
     }

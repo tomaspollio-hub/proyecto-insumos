@@ -35,6 +35,11 @@
 
     /* ── Layout ── */
     .app-body { display: flex; gap: 0; min-height: calc(100dvh - var(--header-height) - 45px); }
+    @media (max-width: 768px) {
+      .app-body { flex-direction: column; }
+      .cart-panel { width: 100% !important; position: static !important; height: auto !important; border-left: none !important; border-top: 1px solid var(--border); max-height: 50dvh; }
+      .tab-panel { padding: var(--space-3) !important; }
+    }
     .tab-panel { display: none; flex: 1; padding: var(--space-6); max-width: 100%; }
     .tab-panel.active { display: block; }
 

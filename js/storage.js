@@ -37,8 +37,12 @@ const storage = {
 
   /* ── Pedidos ──────────────────────────────────────────────── */
 
-  async getOrders(sucursalId) {
-    return apiFetch(`/orders?sucursal=${sucursalId}`);
+  async getOrders(sucursalId, { estado, desde, hasta } = {}) {
+    const qs = new URLSearchParams({ sucursal: sucursalId });
+    if (estado) qs.set('estado', estado);
+    if (desde)  qs.set('desde',  desde);
+    if (hasta)  qs.set('hasta',  hasta);
+    return apiFetch(`/orders?${qs}`);
   },
 
   async saveOrder(order, _sucursalId) {
