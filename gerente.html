@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gerencia — Farmacias Global</title>
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/reset.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: var(--font-sans); background: var(--bg); color: var(--text-primary); margin: 0; }
+
+    .header {
+      position: sticky; top: 0; z-index: 100; height: var(--header-height);
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; padding: 0 var(--space-6); gap: var(--space-4);
+    }
+    .header__logo { height: 32px; }
+    .header__sep { flex: 1; }
+    .btn-nav { font-size: var(--text-sm); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius); background: none; color: var(--text-secondary); text-decoration: none; cursor: pointer; transition: background var(--transition); }
+    .btn-nav:hover { background: var(--bg-subtle); }
+
+    /* Tabs principales */
+    .main-tabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 var(--space-6); position: sticky; top: var(--header-height); z-index: 99; }
+    .main-tab { font-size: var(--text-sm); font-weight: 500; padding: var(--space-3) var(--space-6); border: none; border-bottom: 2px solid transparent; background: none; color: var(--text-muted); cursor: pointer; transition: all var(--transition); }
+    .main-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .main-tab:hover { color: var(--text-primary); }
+
+    .main { max-width: 1100px; margin: 0 auto; padding: var(--space-6); }
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* ── Stats ── */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-8); }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-5); }
+    .stat-card__label { font-size: var(--text-sm); color: var(--text-muted); margin-bottom: var(--space-1); }
+    .stat-card__val   { font-size: var(--text-2xl); font-weight: var(--font-bold); }
+
+    /* Iframe embeds */
+    .embed-frame { width: 100%; border: none; border-radius: var(--radius-md); min-height: calc(100dvh - 180px); }
+
+    /* Tabla resumen */
+    .resumen-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+    .resumen-table th { text-align: left; font-size: var(--text-xs); font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; padding: var(--space-2) var(--space-3); border-bottom: 2px solid var(--border); }
+    .resumen-table td { padding: var(--space-3) var(--space-3); border-bottom: 1px solid var(--bg-subtle); }
+    .estado-badge { display: inline-flex; font-size: var(--text-xs); font-weight: 600; padding: 2px 10px; border-radius: 999px; white-space: nowrap; }
+    .estado-badge--pendiente      { background: var(--warning-light);  color: var(--warning); }
+    .estado-badge--preparando     { background: var(--accent-light);   color: var(--accent); }
+    .estado-badge--despachado     { background: var(--info-light);     color: var(--info); }
+    .estado-badge--recibido       { background: var(--success-light);  color: var(--success); }
+    .estado-badge--solicitado     { background: var(--bg-subtle);      color: var(--text-secondary); }
+    .estado-badge--presupuestado  { background: var(--warning-light);  color: var(--warning); }
+    .estado-badge--aprobado       { background: var(--success-light);  color: var(--success); }
+    .estado-badge--en_preparacion { background: var(--accent-light);   color: var(--accent); }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; }
+    .empty { text-align: center; padding: var(--space-8); color: var(--text-muted); font-size: var(--text-sm); }
+  </style>
+</head>
+<body>
+
+  <header class="header">
+    <img class="header__logo" src="assets/img/logo-global.png" alt="Farmacias Global" />
+    <div class="header__sep"></div>
+    <span style="font-size:var(--text-sm);color:var(--text-muted)" id="header-user"></span>
+    <a href="./admin.html" class="btn-nav">Catálogo</a>
+    <a href="./empresas.html" class="btn-nav">Clientes</a>
+    <button class="btn-nav" id="btn-logout">Salir</button>
+  </header>
+
+  <nav class="main-tabs">
+    <button class="main-tab active" data-panel="resumen">Resumen general</button>
+    <button class="main-tab" data-panel="internos">Pedidos internos</button>
+    <button class="main-tab" data-panel="presupuestos">Presupuestos clientes</button>
+  </nav>
+
+  <main class="main">
+
+    <!-- Panel resumen -->
+    <div class="panel active" id="panel-resumen">
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card"><div class="stat-card__label">Pedidos internos hoy</div><div class="stat-card__val" id="s-pedidos">—</div></div>
+        <div class="stat-card"><div class="stat-card__label">Pedidos pendientes depósito</div><div class="stat-card__val" id="s-pendientes">—</div></div>
+        <div class="stat-card"><div class="stat-card__label">Presupuestos nuevos</div><div class="stat-card__val" id="s-nuevos">—</div></div>
+        <div class="stat-card"><div class="stat-card__label">Presupuestos aprobados este mes</div><div class="stat-card__val" id="s-aprobados">—</div></div>
+      </div>
+
+      <h2 style="font-size:var(--text-base);font-weight:700;margin-bottom:var(--space-4)">Últimos pedidos internos</h2>
+      <div id="tabla-pedidos"><span class="spinner"></span></div>
+
+      <h2 style="font-size:var(--text-base);font-weight:700;margin:var(--space-6) 0 var(--space-4)">Últimos presupuestos de clientes</h2>
+      <div id="tabla-presupuestos"><span class="spinner"></span></div>
+    </div>
+
+    <!-- Panel pedidos internos — embedded link -->
+    <div class="panel" id="panel-internos">
+      <p style="font-size:var(--text-sm);color:var(--text-muted);margin-bottom:var(--space-4)">
+        Vista completa del depósito. Podés cambiar estados de los pedidos directamente.
+      </p>
+      <a href="./deposito.html" target="_blank" class="btn-nav" style="display:inline-block;margin-bottom:var(--space-4)">Abrir en pestaña nueva →</a>
+      <div id="pedidos-detail"><span class="spinner"></span></div>
+    </div>
+
+    <!-- Panel presupuestos — embedded link -->
+    <div class="panel" id="panel-presupuestos">
+      <p style="font-size:var(--text-sm);color:var(--text-muted);margin-bottom:var(--space-4)">
+        Vista completa del panel de ventas. Podés cargar precios y gestionar presupuestos.
+      </p>
+      <a href="./ventas.html" target="_blank" class="btn-nav" style="display:inline-block;margin-bottom:var(--space-4)">Abrir en pestaña nueva →</a>
+      <div id="presup-detail"><span class="spinner"></span></div>
+    </div>
+
+  </main>
+
+  <script type="module">
+    import auth from './js/auth.js';
+
+    const session = await auth.requireAuth();
+    if (!session) throw new Error();
+    if (session.rol !== 'gerente') { window.location.href = './login.html'; throw new Error(); }
+
+    document.getElementById('header-user').textContent = session.usuario;
+    document.getElementById('btn-logout').addEventListener('click', () => auth.logout());
+
+    const token = sessionStorage.getItem('isumos_token');
+    function authH() { return { 'Authorization': `Bearer ${token}` }; }
+
+    // ── Tabs ──────────────────────────────────────────────────
+    document.querySelectorAll('.main-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.main-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(`panel-${tab.dataset.panel}`).classList.add('active');
+        if (tab.dataset.panel === 'internos') loadPedidosDetail();
+        if (tab.dataset.panel === 'presupuestos') loadPresupuestosDetail();
+      });
+    });
+
+    // ── Resumen ───────────────────────────────────────────────
+    const ESTADO_LABELS_P = { solicitado:'Nuevo', en_revision:'En revisión', presupuestado:'Enviado', aprobado:'Aprobado', rechazado:'Rechazado', en_preparacion:'En preparación', despachado:'Despachado', entregado:'Entregado' };
+    const ESTADO_LABELS_I = { pendiente_aprobacion:'Esp. aprobación', pendiente:'Pendiente', preparando:'Preparando', despachado:'Despachado', recibido:'Recibido', rechazado:'Rechazado' };
+
+    async function loadResumen() {
+      const [pedidosR, presupR] = await Promise.all([
+        fetch('/api/orders/all', { headers: authH() }).then(r => r.json()),
+        fetch('/api/presupuestos', { headers: authH() }).then(r => r.json()),
+      ]);
+
+      const hoy = new Date().toISOString().slice(0,10);
+      const mes  = new Date().toISOString().slice(0,7);
+
+      document.getElementById('s-pedidos').textContent    = pedidosR.filter(p => p.fecha.startsWith(hoy)).length;
+      document.getElementById('s-pendientes').textContent = pedidosR.filter(p => p.estado === 'pendiente').length;
+      document.getElementById('s-nuevos').textContent     = presupR.filter(p => p.estado === 'solicitado').length;
+      document.getElementById('s-aprobados').textContent  = presupR.filter(p => p.estado === 'aprobado' && p.fecha_solicitud?.startsWith(mes)).length;
+
+      // Últimos pedidos internos
+      const ultPedidos = pedidosR.slice(0, 8);
+      document.getElementById('tabla-pedidos').innerHTML = ultPedidos.length
+        ? `<table class="resumen-table"><thead><tr><th>Sucursal</th><th>Usuario</th><th>Fecha</th><th>Estado</th></tr></thead><tbody>
+            ${ultPedidos.map(p => `<tr>
+              <td>${p.sucursal_nombre}</td>
+              <td>${p.usuario}</td>
+              <td>${fmtDate(p.fecha)}</td>
+              <td><span class="estado-badge estado-badge--${p.estado}">${ESTADO_LABELS_I[p.estado]??p.estado}</span></td>
+            </tr>`).join('')}
+           </tbody></table>`
+        : '<div class="empty">No hay pedidos internos.</div>';
+
+      // Últimos presupuestos
+      const ultPresup = presupR.slice(0, 8);
+      document.getElementById('tabla-presupuestos').innerHTML = ultPresup.length
+        ? `<table class="resumen-table"><thead><tr><th>Empresa</th><th>Solicitado</th><th>Estado</th></tr></thead><tbody>
+            ${ultPresup.map(p => `<tr>
+              <td>${p.empresa_nombre}</td>
+              <td>${fmtDate(p.fecha_solicitud)}</td>
+              <td><span class="estado-badge estado-badge--${p.estado}">${ESTADO_LABELS_P[p.estado]??p.estado}</span></td>
+            </tr>`).join('')}
+           </tbody></table>`
+        : '<div class="empty">No hay presupuestos.</div>';
+    }
+
+    async function loadPedidosDetail() {
+      const rows = await fetch('/api/orders/all', { headers: authH() }).then(r => r.json());
+      document.getElementById('pedidos-detail').innerHTML = rows.length
+        ? `<table class="resumen-table"><thead><tr><th>Sucursal</th><th>Usuario</th><th>Productos</th><th>Fecha</th><th>Estado</th></tr></thead><tbody>
+            ${rows.map(p => `<tr>
+              <td>${p.sucursal_nombre}</td>
+              <td>${p.usuario}</td>
+              <td>${p.items.length} prod.</td>
+              <td>${fmtDate(p.fecha)}</td>
+              <td><span class="estado-badge estado-badge--${p.estado}">${ESTADO_LABELS_I[p.estado]??p.estado}</span></td>
+            </tr>`).join('')}
+           </tbody></table>`
+        : '<div class="empty">No hay pedidos internos.</div>';
+    }
+
+    async function loadPresupuestosDetail() {
+      const rows = await fetch('/api/presupuestos', { headers: authH() }).then(r => r.json());
+      document.getElementById('presup-detail').innerHTML = rows.length
+        ? `<table class="resumen-table"><thead><tr><th>Empresa</th><th>Vendedor</th><th>Productos</th><th>Fecha</th><th>Estado</th></tr></thead><tbody>
+            ${rows.map(p => `<tr>
+              <td>${p.empresa_nombre}</td>
+              <td>${p.usuario_ventas||'—'}</td>
+              <td>${p.items.length} prod.</td>
+              <td>${fmtDate(p.fecha_solicitud)}</td>
+              <td><span class="estado-badge estado-badge--${p.estado}">${ESTADO_LABELS_P[p.estado]??p.estado}</span></td>
+            </tr>`).join('')}
+           </tbody></table>`
+        : '<div class="empty">No hay presupuestos.</div>';
+    }
+
+    function fmtDate(iso) {
+      if (!iso) return '—';
+      return new Date(iso).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    }
+
+    loadResumen();
+  </script>
+</body>
+</html>

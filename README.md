@@ -142,35 +142,38 @@ Keys en `localStorage`:
 
 ---
 
-## Pendiente — Etapa 2
+## Etapas completadas
 
-### Migración a backend
+| Etapa | Qué se construyó |
+|---|---|
+| 1 | Sistema interno — login, catálogo, carrito, historial (localStorage) |
+| 2 | Migración a backend Flask + SQLite, JWT, API REST, panel depósito |
+| 3 | Roles funcionales (aprobación encargado), passwords hasheados, SSE tiempo real, admin catálogo |
+| 4 | Módulo ventas corporativas: portal cliente, panel ventas, presupuestos, empresas, import/export CSV |
+| 5 | IVA/descuento por ítem en presupuestos, comentarios cliente↔ventas (con notas internas), adjuntos de archivos |
 
-El único archivo que cambia en profundidad es `storage.js`. El resto del código no se toca.
+---
 
-```js
-// Hoy:
-async getOrders(sucursalId) {
-  return JSON.parse(localStorage.getItem(`isumos_orders:${sucursalId}`)) ?? [];
-}
+## Pendiente — Etapa 6
 
-// Etapa 2:
-async getOrders(sucursalId) {
-  const res = await fetch(`/api/orders?sucursal=${sucursalId}`, { headers: authHeaders() });
-  return res.json();
-}
-```
+### Integración con ERP ZETTI (zweb + Touch and Sale)
 
-`auth.js`: reemplazar validación contra `usuarios.json` por POST a `/api/auth/login`. Gestionar JWT o cookie de sesión.
+El módulo ventas está diseñado para conectarse a ZETTI cuando esté disponible la API.
 
-### Funcionalidades pendientes
+| Dato | Dirección | Frecuencia |
+|---|---|---|
+| Lista de precios | ZETTI → plataforma | 1 vez/día o botón "actualizar" |
+| Clientes / empresas | ZETTI → plataforma | 1 vez/día |
+| Stock en tiempo real | ZETTI → plataforma | Cada 15 min o webhook |
+| Presupuesto aprobado | Plataforma → ZETTI | Al instante |
+| Remitos y facturas | ZETTI → plataforma | Al generarse en ZETTI |
 
-- [ ] Backend con base de datos (productos, pedidos, usuarios)
-- [ ] Autenticación real (JWT / sesión server-side)
-- [ ] Roles funcionales: empleado no puede enviar sin aprobación de encargado
-- [ ] Estados del pedido: `pendiente → preparando → despachado → recibido`
-- [ ] Panel central del depósito: ver todos los pedidos de todas las sucursales (ya hay `storage.getAllOrders()` preparado)
-- [ ] Notificación al depósito cuando llega un pedido nuevo
-- [ ] Gestión del catálogo desde panel de admin (altas, bajas, cambios de stock)
-- [ ] Integración con sistema de inventario para disponibilidad en tiempo real
+**Requiere:** documentación de la API REST de zweb.
+
+### Otras mejoras pendientes
+
+- [ ] Notificación por email — requiere datos SMTP del servidor de correo (en gestión)
+- [ ] Integración ZETTI — requiere documentación API de zweb (en gestión)
 - [ ] Imágenes reales de productos en `assets/img/productos/`
+- [ ] Historial de cambios de estado en cada presupuesto (auditoría)
+- [ ] Múltiples usuarios por empresa cliente (hoy 1, el modelo de DB ya lo soporta)

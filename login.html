@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Ingresar — Isumos Farmacias</title>
+  <title>Ingresar — Farmacias Global</title>
   <link rel="stylesheet" href="css/variables.css" />
   <link rel="stylesheet" href="css/reset.css" />
   <link rel="stylesheet" href="css/login.css" />
@@ -17,14 +17,9 @@
 
     <!-- Branding -->
     <div class="login-brand">
-      <div class="login-brand__logo" aria-hidden="true">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round"
-            d="M12 3v2m0 14v2M5.636 5.636l1.414 1.414m9.9 9.9 1.414 1.414M3 12h2m14 0h2M5.636 18.364l1.414-1.414M16.95 7.05l1.414-1.414M9 12a3 3 0 1 1 6 0 3 3 0 0 1-6 0Z" />
-        </svg>
-      </div>
-      <h1 class="login-brand__title">Isumos</h1>
-      <p class="login-brand__subtitle">Sistema de pedidos internos</p>
+      <img src="assets/img/logo-global.png" alt="Farmacias & Perfumerías Global"
+           style="max-width:240px;width:100%;margin-bottom:var(--space-4)" />
+      <p class="login-brand__subtitle">Portal de pedidos corporativos</p>
     </div>
 
     <!-- Error -->
@@ -75,7 +70,7 @@
 
     </form>
 
-    <p class="login-footer">Isumos &copy; 2026 — Uso interno</p>
+    <p class="login-footer">Farmacias & Perfumerías Global &copy; 2026 — Uso interno</p>
   </div>
 
   <script type="module">
@@ -90,8 +85,13 @@
 
     /* Redirigir si ya hay sesión activa */
     auth.getSession().then(session => {
-      if (session) window.location.href = './index.html';
+      if (session) window.location.href = _dest(session.rol);
     });
+
+    function _dest(rol) {
+      return { deposito: './deposito.html', cliente: './portal.html',
+               ventas: './ventas.html', gerente: './gerente.html' }[rol] ?? './index.html';
+    }
 
     function setLoading(on) {
       btnSubmit.classList.toggle('is-loading', on);
@@ -136,7 +136,7 @@
       const result = await auth.login(usuario, password);
 
       if (result.ok) {
-        window.location.href = './index.html';
+        window.location.href = _dest(result.session.rol);
       } else {
         setLoading(false);
         const mensajes = {

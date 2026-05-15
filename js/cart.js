@@ -13,7 +13,10 @@ const cart = {
   async init(session) {
     this._session = session;
 
-    const res = await fetch('./productos.json');
+    const token = sessionStorage.getItem('isumos_token');
+    const res = await fetch('/api/products', {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
     const list = await res.json();
     this._products = Object.fromEntries(list.map(p => [p.sku_interno, p]));
 
@@ -94,18 +97,7 @@ const cart = {
     const items = this.getItems();
     if (items.length === 0) return { ok: false, motivo: 'empty' };
 
-    const ts         = Date.now();
-    const hash       = ts.toString(36).slice(-4).toUpperCase();
-    const sucursalId = this._session?.id ?? 'xx';
-    const id         = `${sucursalId}-${ts}-${hash}`;
-
-    const order = {
-      id,
-      sucursal_id:     this._session?.id,
-      sucursal_nombre: this._session?.sucursal,
-      usuario:         this._session?.usuario,
-      rol:             this._session?.rol,
-      fecha:           new Date().toISOString(),
+    const payload = {
       items: items.map(i => ({
         sku:           i.sku,
         nombre:        i.product.nombre,
@@ -117,8 +109,9 @@ const cart = {
       })),
     };
 
-    await storage.saveOrder(order, this._session.id);
-    await this.clear();
+    const order = await storage.saveOrder(payload, this._session.id);
+    this._items = [];
+    // El carrito ya se vació en el server; sincronizamos estado local
     return { ok: true, order };
   },
 

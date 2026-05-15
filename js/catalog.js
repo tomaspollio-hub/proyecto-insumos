@@ -14,8 +14,11 @@ const catalog = {
   async init() {
     let products;
     try {
-      const res = await fetch('./productos.json');
-      if (!res.ok) throw new Error('No se pudo cargar productos.json');
+      const token = sessionStorage.getItem('isumos_token');
+      const res = await fetch('/api/products', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       products = await res.json();
     } catch (err) {
       console.error('[catalog] Error cargando productos:', err);

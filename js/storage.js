@@ -1,27 +1,26 @@
 /**
- * storage.js — capa de abstracción de persistencia.
- *
- * TODA la app habla solo con este módulo. Nunca accede a localStorage
- * directamente desde otro módulo. Toda la API es async para que reemplazar
- * el cuerpo de cada función por fetch() sea transparente para el resto del código.
- *
- * Migración a backend: reemplazar la implementación interna de cada método.
- * El contrato (nombres + firmas) no cambia.
+ * storage.js — capa de abstracción de persistencia. Etapa 3.
  */
 
-const KEYS = {
-  CART:    sucursalId => `isumos_cart:${sucursalId}`,
-  ORDERS:  sucursalId => `isumos_orders:${sucursalId}`,
-  SESSION: 'isumos_session',
-};
+const API = '/api';
 
-/* Avisa una sola vez si quedan datos de la key global legada */
-let _legacyOrdersWarned = false;
-function _checkLegacyOrders() {
-  if (!_legacyOrdersWarned && localStorage.getItem('isumos_orders') !== null) {
-    console.warn('[storage] Clave isumos_orders global detectada — legado, ignorada');
-    _legacyOrdersWarned = true;
+function authHeaders() {
+  const token = sessionStorage.getItem('isumos_token');
+  return token
+    ? { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+    : { 'Content-Type': 'application/json' };
+}
+
+async function apiFetch(path, options = {}) {
+  const res = await fetch(`${API}${path}`, {
+    ...options,
+    headers: { ...authHeaders(), ...(options.headers ?? {}) },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw Object.assign(new Error(body.motivo ?? `HTTP ${res.status}`), { status: res.status, body });
   }
+  return res.json();
 }
 
 const storage = {
@@ -29,55 +28,78 @@ const storage = {
   /* ── Carrito ──────────────────────────────────────────────── */
 
   async getCart(sucursalId) {
-    const raw = localStorage.getItem(KEYS.CART(sucursalId));
-    return raw ? JSON.parse(raw) : { items: [] };
+    return apiFetch(`/cart/${sucursalId}`);
   },
 
   async saveCart(cart, sucursalId) {
-    localStorage.setItem(KEYS.CART(sucursalId), JSON.stringify(cart));
+    await apiFetch(`/cart/${sucursalId}`, { method: 'PUT', body: JSON.stringify(cart) });
   },
 
-  /* ── Historial de pedidos (por sucursal) ──────────────────── */
+  /* ── Pedidos ──────────────────────────────────────────────── */
 
   async getOrders(sucursalId) {
-    _checkLegacyOrders();
-    const raw = localStorage.getItem(KEYS.ORDERS(sucursalId));
-    return raw ? JSON.parse(raw) : [];
+    return apiFetch(`/orders?sucursal=${sucursalId}`);
   },
 
-  async saveOrder(order, sucursalId) {
-    const orders = await storage.getOrders(sucursalId);
-    orders.unshift(order);
-    localStorage.setItem(KEYS.ORDERS(sucursalId), JSON.stringify(orders));
-    return order;
+  async saveOrder(order, _sucursalId) {
+    const res = await apiFetch('/orders', { method: 'POST', body: JSON.stringify(order) });
+    return res.order;
   },
 
-  /* TODO: usar solo en vista centralizada de etapa 2, no en UI de sucursal */
-  async getAllOrders() {
-    const allKeys = Object.keys(localStorage).filter(k => k.startsWith('isumos_orders:'));
-    const all = [];
-    for (const key of allKeys) {
-      try {
-        const parsed = JSON.parse(localStorage.getItem(key));
-        if (Array.isArray(parsed)) all.push(...parsed);
-      } catch { /* key corrupta, ignorar */ }
-    }
-    return all.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+  async getAllOrders(estado) {
+    const qs = estado ? `?estado=${estado}` : '';
+    return apiFetch(`/orders/all${qs}`);
   },
 
-  /* ── Sesión ───────────────────────────────────────────────── */
+  /* ── Aprobación (encargado) ───────────────────────────────── */
+
+  async getPendingApproval(sucursalId) {
+    return apiFetch(`/orders/pending-approval?sucursal=${sucursalId}`);
+  },
+
+  async approveOrder(orderId) {
+    return apiFetch(`/orders/${orderId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ estado: 'pendiente' }),
+    });
+  },
+
+  async rejectOrder(orderId) {
+    return apiFetch(`/orders/${orderId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ estado: 'rechazado' }),
+    });
+  },
+
+  /* ── Estado pedido (depósito) ─────────────────────────────── */
+
+  async updateOrderState(orderId, estado) {
+    return apiFetch(`/orders/${orderId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ estado }),
+    });
+  },
+
+  /* ── Catálogo admin (depósito) ────────────────────────────── */
+
+  async updateProduct(sku, data) {
+    return apiFetch(`/products/${sku}`, { method: 'PATCH', body: JSON.stringify(data) });
+  },
+
+  /* ── Sesión (localStorage) ────────────────────────────────── */
 
   async getSession() {
-    const raw = localStorage.getItem(KEYS.SESSION);
+    const raw = localStorage.getItem('isumos_session');
     return raw ? JSON.parse(raw) : null;
   },
 
   async saveSession(data) {
-    localStorage.setItem(KEYS.SESSION, JSON.stringify(data));
+    localStorage.setItem('isumos_session', JSON.stringify(data));
   },
 
   async clearSession() {
-    localStorage.removeItem(KEYS.SESSION);
+    localStorage.removeItem('isumos_session');
+    sessionStorage.removeItem('isumos_token');
   },
 };
 

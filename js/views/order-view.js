@@ -130,15 +130,23 @@ const orderView = {
   /* ── Pedido enviado ───────────────────────────────────────── */
 
   renderSuccess(order) {
+    const needsApproval = order.estado === 'pendiente_aprobacion';
     const modal = document.getElementById('confirm-modal');
     modal.innerHTML = `
       <div class="modal__body modal__body--success">
-        <div class="success-icon" aria-hidden="true">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-            <path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm13.36-1.814a.75.75 0 1 0-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.14-.094l3.75-5.25Z" clip-rule="evenodd"/>
-          </svg>
+        <div class="success-icon${needsApproval ? ' success-icon--pending' : ''}" aria-hidden="true">
+          ${needsApproval
+            ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                <path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25ZM12.75 6a.75.75 0 0 0-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 0 0 0-1.5h-3.75V6Z" clip-rule="evenodd"/>
+               </svg>`
+            : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                <path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm13.36-1.814a.75.75 0 1 0-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.14-.094l3.75-5.25Z" clip-rule="evenodd"/>
+               </svg>`}
         </div>
-        <h2 class="modal__title">Pedido enviado</h2>
+        <h2 class="modal__title">${needsApproval ? 'Pedido enviado' : 'Pedido enviado'}</h2>
+        ${needsApproval
+          ? `<p class="success-subtitle">Aguardando aprobación del encargado</p>`
+          : ''}
         <p class="success-id">ID: <code>${_esc(order.id)}</code></p>
         <details class="order-json-wrap">
           <summary class="order-json-toggle">Ver JSON del pedido</summary>
@@ -166,13 +174,50 @@ const orderView = {
 
   /* ── Historial ────────────────────────────────────────────── */
 
-  renderHistory(orders, onRepeat) {
+  renderHistory(orders, { onRepeat, onApprove, onReject, pendingApproval = [] } = {}) {
     const modal = document.getElementById('history-modal');
+
+    const ESTADO_LABELS = {
+      pendiente_aprobacion: 'Esperando aprobación',
+      pendiente:   'Pendiente',
+      preparando:  'Preparando',
+      despachado:  'Despachado',
+      recibido:    'Recibido',
+      rechazado:   'Rechazado',
+    };
+
+    const approvalSection = pendingApproval.length > 0 ? `
+      <div class="approval-section">
+        <h3 class="approval-section__title">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5Zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clip-rule="evenodd"/>
+          </svg>
+          Pedidos para aprobar (${pendingApproval.length})
+        </h3>
+        ${pendingApproval.map(o => {
+          const bultos = o.items.reduce((s, i) => s + i.qty, 0);
+          return `
+            <div class="approval-card" data-order-id="${_esc(o.id)}">
+              <div class="approval-card__info">
+                <span class="approval-card__user">${_esc(o.usuario)}</span>
+                <span class="approval-card__meta">${_fmtDate(o.fecha)} · ${o.items.length} prod. · ${bultos} bultos</span>
+              </div>
+              <div class="approval-card__items">
+                ${o.items.map(i => `<span class="approval-item">${_esc(i.nombre)} ×${i.qty}</span>`).join('')}
+              </div>
+              <div class="approval-card__actions">
+                <button class="btn-reject" data-order-id="${_esc(o.id)}">Rechazar</button>
+                <button class="btn-approve" data-order-id="${_esc(o.id)}">Aprobar</button>
+              </div>
+            </div>`;
+        }).join('')}
+      </div>` : '';
 
     modal.innerHTML = `
       <button class="modal__close" id="history-close" aria-label="Cerrar">${ICON_CLOSE}</button>
       <div class="modal__body">
         <h2 class="modal__title">Historial de pedidos</h2>
+        ${approvalSection}
         ${orders.length === 0
           ? '<p class="empty-state" style="padding:var(--space-10) 0">No hay pedidos anteriores.</p>'
           : `<div class="history-list">
@@ -187,6 +232,7 @@ const orderView = {
                           ${order.items.length} prod. · ${totalBultos} bultos
                         </span>
                       </div>
+                      ${order.estado ? `<span class="estado-chip estado-chip--${_esc(order.estado)}">${_esc(ESTADO_LABELS[order.estado] ?? order.estado)}</span>` : ''}
                       <svg class="history-order__chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/>
                       </svg>
@@ -199,9 +245,10 @@ const orderView = {
                             <span class="history-row__unit">${_esc(i.unidad_pedido)}</span>
                           </span>
                         </div>`).join('')}
+                      ${order.estado !== 'rechazado' ? `
                       <button class="btn-repeat-order" data-order-id="${_esc(order.id)}">
                         ${ICON_REPEAT} Repetir este pedido
-                      </button>
+                      </button>` : ''}
                     </div>
                   </details>`;
               }).join('')}
@@ -212,8 +259,19 @@ const orderView = {
     _bindClose('history-overlay', 'history-close', this);
 
     modal.querySelectorAll('.btn-repeat-order').forEach(btn => {
-      btn.addEventListener('click', () => onRepeat(btn.dataset.orderId));
+      btn.addEventListener('click', () => onRepeat?.(btn.dataset.orderId));
     });
+
+    if (onApprove) {
+      modal.querySelectorAll('.btn-approve').forEach(btn => {
+        btn.addEventListener('click', () => onApprove(btn.dataset.orderId));
+      });
+    }
+    if (onReject) {
+      modal.querySelectorAll('.btn-reject').forEach(btn => {
+        btn.addEventListener('click', () => onReject(btn.dataset.orderId));
+      });
+    }
   },
 
   closeHistory() { _closeOverlay('history-overlay'); },

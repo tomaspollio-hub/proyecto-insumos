@@ -18,12 +18,7 @@
   <header class="app-header">
     <div class="app-header__inner">
       <div class="app-header__brand">
-        <svg class="app-header__logo" xmlns="http://www.w3.org/2000/svg" fill="none"
-             viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round"
-            d="M12 3v2m0 14v2M5.636 5.636l1.414 1.414m9.9 9.9 1.414 1.414M3 12h2m14 0h2M5.636 18.364l1.414-1.414M16.95 7.05l1.414-1.414M9 12a3 3 0 1 1 6 0 3 3 0 0 1-6 0Z" />
-        </svg>
-        <span class="app-header__title">Isumos</span>
+        <img class="app-header__logo" src="assets/img/logo-global.png" alt="Farmacias Global">
       </div>
 
       <div class="app-header__meta">
@@ -238,21 +233,103 @@
       catalogView.showToast(msg);
     });
 
-    /* ── Historial ────────────────────────────────────────────── */
-    document.getElementById('btn-history').addEventListener('click', async () => {
-      const orders = await storage.getOrders(session.id);
-      orderView.renderHistory(orders, async (orderId) => {
-        const result = await cart.repeatOrder(orderId);
-        orderView.closeHistory();
-        refreshCart();
-        const n = result.cargados.length;
-        let msg = `${n} producto${n !== 1 ? 's' : ''} cargado${n !== 1 ? 's' : ''} al carrito`;
-        if (result.omitidos.length) {
-          msg += ` · Omitidos (sin stock): ${result.omitidos.map(o => o.nombre).join(', ')}`;
+    /* ── Badge de aprobación (encargado) ──────────────────────── */
+    const btnHistory = document.getElementById('btn-history');
+    let pendingApproval = [];
+
+    async function refreshApprovalBadge() {
+      if (session.rol !== 'encargado') return;
+      try {
+        pendingApproval = await storage.getPendingApproval(session.id);
+      } catch { pendingApproval = []; }
+
+      let badge = btnHistory.querySelector('.approval-badge');
+      if (pendingApproval.length > 0) {
+        if (!badge) {
+          badge = document.createElement('span');
+          badge.className = 'approval-badge';
+          btnHistory.appendChild(badge);
         }
-        catalogView.showToast(msg);
+        badge.textContent = pendingApproval.length;
+      } else {
+        badge?.remove();
+      }
+    }
+
+    await refreshApprovalBadge();
+
+    /* ── Historial ────────────────────────────────────────────── */
+    btnHistory.addEventListener('click', async () => {
+      const orders = await storage.getOrders(session.id);
+      orderView.renderHistory(orders, {
+        onRepeat: async (orderId) => {
+          const result = await cart.repeatOrder(orderId);
+          orderView.closeHistory();
+          refreshCart();
+          const n = result.cargados.length;
+          let msg = `${n} producto${n !== 1 ? 's' : ''} cargado${n !== 1 ? 's' : ''} al carrito`;
+          if (result.omitidos.length) {
+            msg += ` · Omitidos (sin stock): ${result.omitidos.map(o => o.nombre).join(', ')}`;
+          }
+          catalogView.showToast(msg);
+        },
+        onApprove: session.rol === 'encargado' ? async (orderId) => {
+          await storage.approveOrder(orderId);
+          pendingApproval = pendingApproval.filter(o => o.id !== orderId);
+          const orders2 = await storage.getOrders(session.id);
+          orderView.renderHistory(orders2, arguments.callee.__callbacks);
+          refreshApprovalBadge();
+          catalogView.showToast('Pedido aprobado — pasó al depósito');
+        } : undefined,
+        onReject: session.rol === 'encargado' ? async (orderId) => {
+          await storage.rejectOrder(orderId);
+          pendingApproval = pendingApproval.filter(o => o.id !== orderId);
+          const orders2 = await storage.getOrders(session.id);
+          orderView.renderHistory(orders2, arguments.callee.__callbacks);
+          refreshApprovalBadge();
+          catalogView.showToast('Pedido rechazado');
+        } : undefined,
+        pendingApproval: session.rol === 'encargado' ? pendingApproval : [],
       });
     });
+
+    /* ── SSE: actualizaciones en tiempo real ──────────────────── */
+    const ESTADO_LABELS = {
+      pendiente_aprobacion: 'Esperando aprobación',
+      pendiente:   'Pendiente en depósito',
+      preparando:  'En preparación',
+      despachado:  'Despachado',
+      recibido:    'Recibido',
+      rechazado:   'Rechazado',
+    };
+
+    function connectSSE() {
+      const token = sessionStorage.getItem('isumos_token');
+      if (!token) return;
+
+      const es = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
+
+      es.onmessage = (e) => {
+        const event = JSON.parse(e.data);
+
+        if (event.tipo === 'pedido_para_aprobar' && session.rol === 'encargado') {
+          refreshApprovalBadge();
+          catalogView.showToast(`Nuevo pedido de ${event.usuario} — esperando aprobación`);
+        }
+
+        if (event.tipo === 'estado_actualizado') {
+          const label = ESTADO_LABELS[event.estado] ?? event.estado;
+          catalogView.showToast(`Pedido actualizado: ${label}`);
+        }
+      };
+
+      es.onerror = () => {
+        es.close();
+        setTimeout(connectSSE, 5000);
+      };
+    }
+
+    connectSSE();
   </script>
 
 </body>

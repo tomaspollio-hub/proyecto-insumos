@@ -1,64 +1,56 @@
 /**
  * auth.js — autenticación y gestión de sesión.
  *
- * Hoy valida contra usuarios.json. Etapa 2: reemplazar login() por POST /api/auth/login.
- * El resto del código solo llama a auth.login / auth.logout / auth.getSession / auth.requireAuth.
+ * Etapa 2: valida contra POST /api/auth/login. Guarda JWT en sessionStorage.
+ * El resto del código sigue llamando solo a auth.login / auth.logout /
+ * auth.getSession / auth.requireAuth — contrato sin cambios.
  */
 
 import storage from './storage.js';
 
 const auth = {
 
-  /**
-   * Intenta autenticar al usuario contra usuarios.json.
-   * @returns {{ ok: boolean, session?: object, motivo?: string }}
-   */
   async login(usuario, password) {
-    let usuarios;
+    let res;
     try {
-      const res = await fetch('./usuarios.json');
-      if (!res.ok) throw new Error('No se pudo cargar usuarios.json');
-      usuarios = await res.json();
-    } catch (err) {
-      console.error('[auth] Error cargando usuarios:', err);
+      res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usuario, password }),
+      });
+    } catch {
       return { ok: false, motivo: 'error_servidor' };
     }
 
-    const match = usuarios.find(
-      u => u.usuario === usuario && u.password === password
-    );
+    const data = await res.json();
+    if (!data.ok) return { ok: false, motivo: data.motivo };
 
-    if (!match) return { ok: false, motivo: 'credenciales_invalidas' };
-
-    const session = {
-      id:       match.id,
-      sucursal: match.sucursal,
-      usuario:  match.usuario,
-      rol:      match.rol,
-    };
-
-    await storage.saveSession(session);
-    return { ok: true, session };
+    // Guardar token para que storage.js lo incluya en cada request
+    sessionStorage.setItem('isumos_token', data.token);
+    await storage.saveSession(data.session);
+    return { ok: true, session: data.session };
   },
 
-  /** Cierra sesión y redirige al login. */
   async logout() {
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
     await storage.clearSession();
     window.location.href = './login.html';
   },
 
-  /** Devuelve la sesión activa o null. */
   async getSession() {
     return storage.getSession();
   },
 
-  /**
-   * Guard de ruta. Redirige a login si no hay sesión activa.
-   * @returns {object|null} sesión activa o null (tras redirigir)
-   */
   async requireAuth() {
     const session = await storage.getSession();
     if (!session) {
+      window.location.href = './login.html';
+      return null;
+    }
+    // Verificar que el token sigue en sessionStorage (se pierde al cerrar pestaña)
+    const token = sessionStorage.getItem('isumos_token');
+    if (!token) {
+      await storage.clearSession();
       window.location.href = './login.html';
       return null;
     }

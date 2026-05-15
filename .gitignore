@@ -1,1 +1,4 @@
 .claude/
+server/isumos.db
+server/__pycache__/
+*.pyc

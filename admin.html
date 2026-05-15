@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Catálogo Admin — Isumos</title>
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/reset.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: var(--font-sans); background: var(--bg); color: var(--text-primary); min-height: 100dvh; margin: 0; }
+
+    .header {
+      position: sticky; top: 0; z-index: 100;
+      height: var(--header-height); background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; padding: 0 var(--space-6); gap: var(--space-4);
+    }
+    .header__logo { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-lg); font-weight: var(--font-bold); color: var(--accent); }
+    .header__logo img { height: 32px; }
+    .header__title { font-size: var(--text-base); font-weight: var(--font-semibold); color: var(--text-secondary); }
+    .header__sep { flex: 1; }
+    .btn-back, .btn-logout {
+      font-size: var(--text-sm); font-weight: var(--font-medium);
+      padding: var(--space-2) var(--space-3); border-radius: var(--radius);
+      border: 1px solid var(--border); background: none; color: var(--text-secondary);
+      cursor: pointer; text-decoration: none; transition: background var(--transition);
+    }
+    .btn-back:hover, .btn-logout:hover { background: var(--bg-subtle); }
+
+    .main { max-width: 1000px; margin: 0 auto; padding: var(--space-8) var(--space-6); }
+
+    .toolbar {
+      display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap;
+      margin-bottom: var(--space-5);
+    }
+    .search-input {
+      flex: 1; min-width: 200px; padding: var(--space-2) var(--space-3);
+      border: 1px solid var(--border); border-radius: var(--radius);
+      font-size: var(--text-sm); font-family: inherit;
+      background: var(--surface); color: var(--text-primary);
+    }
+    .search-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-light); }
+    .cat-select {
+      padding: var(--space-2) var(--space-3); border: 1px solid var(--border);
+      border-radius: var(--radius); font-size: var(--text-sm); font-family: inherit;
+      background: var(--surface); color: var(--text-primary); cursor: pointer;
+    }
+
+    /* ── Table ── */
+    .products-table { width: 100%; border-collapse: collapse; }
+    .products-table th {
+      text-align: left; font-size: var(--text-xs); font-weight: var(--font-semibold);
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em;
+      padding: var(--space-2) var(--space-3); border-bottom: 2px solid var(--border);
+      position: sticky; top: var(--header-height); background: var(--bg);
+    }
+    .products-table td {
+      padding: var(--space-3) var(--space-3); border-bottom: 1px solid var(--bg-subtle);
+      font-size: var(--text-sm); vertical-align: middle;
+    }
+    .products-table tr:hover td { background: var(--bg-subtle); }
+
+    .sku-cell { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); }
+    .nombre-cell { font-weight: var(--font-medium); }
+    .cat-cell { color: var(--text-secondary); font-size: var(--text-xs); }
+
+    .disp-select {
+      padding: 3px var(--space-2); border-radius: var(--radius-full);
+      border: 1px solid var(--border); font-size: var(--text-xs);
+      font-weight: var(--font-medium); cursor: pointer;
+      font-family: inherit; background: var(--surface);
+    }
+    .disp-select[data-val="disponible"]  { background: var(--success-light); color: var(--success); border-color: var(--success-light); }
+    .disp-select[data-val="bajo_stock"]  { background: var(--warning-light); color: var(--warning); border-color: var(--warning-light); }
+    .disp-select[data-val="sin_stock"]   { background: var(--danger-light);  color: var(--danger);  border-color: var(--danger-light); }
+
+    .multiplo-input {
+      width: 60px; padding: 3px var(--space-2); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); font-size: var(--text-sm); font-family: inherit;
+      text-align: center;
+    }
+    .multiplo-input:focus { outline: none; border-color: var(--accent); }
+
+    .btn-save {
+      font-size: var(--text-xs); font-weight: var(--font-semibold);
+      padding: 4px var(--space-3); border-radius: var(--radius);
+      border: none; background: var(--accent); color: #fff;
+      cursor: pointer; transition: filter var(--transition); white-space: nowrap;
+    }
+    .btn-save:hover   { filter: brightness(0.9); }
+    .btn-save:disabled { background: var(--border); color: var(--text-muted); cursor: default; filter: none; }
+    .btn-save.saved   { background: var(--success); }
+
+    .count-bar { font-size: var(--text-sm); color: var(--text-muted); margin-bottom: var(--space-3); }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; }
+    .empty-state { text-align: center; padding: var(--space-16); color: var(--text-muted); }
+  </style>
+</head>
+<body>
+
+  <header class="header">
+    <div class="header__logo">
+      <img src="assets/img/logo-global.png" alt="Farmacias Global">
+    </div>
+    <span class="header__title">/ Admin</span>
+    <div class="header__sep"></div>
+    <a href="./empresas.html" class="btn-back">Clientes</a>
+    <a href="./deposito.html" class="btn-back">← Pedidos</a>
+    <button class="btn-logout" id="btn-logout">Salir</button>
+  </header>
+
+  <!-- Tabs -->
+  <nav style="background:var(--surface);border-bottom:1px solid var(--border);padding:0 var(--space-6);display:flex;gap:0;position:sticky;top:var(--header-height);z-index:99">
+    <button class="admin-tab active" data-tab="catalogo" style="font-size:var(--text-sm);font-weight:500;padding:var(--space-3) var(--space-5);border:none;border-bottom:2px solid var(--accent);background:none;color:var(--accent);cursor:pointer">Catálogo</button>
+    <button class="admin-tab" data-tab="usuarios" style="font-size:var(--text-sm);font-weight:500;padding:var(--space-3) var(--space-5);border:none;border-bottom:2px solid transparent;background:none;color:var(--text-muted);cursor:pointer">Usuarios internos</button>
+  </nav>
+
+  <main class="main">
+
+  <!-- Panel catálogo -->
+  <div id="panel-catalogo">
+    <div class="toolbar">
+      <input class="search-input" id="search" type="search" placeholder="Buscar por nombre o SKU…" />
+      <select class="cat-select" id="cat-filter">
+        <option value="">Todas las categorías</option>
+      </select>
+    </div>
+    <div class="count-bar" id="count-bar"></div>
+    <div id="table-wrap"><div class="empty-state"><span class="spinner"></span></div></div>
+  </div>
+
+  <!-- Panel usuarios -->
+  <div id="panel-usuarios" style="display:none">
+    <div style="display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-6)">
+      <h2 style="font-size:var(--text-xl);font-weight:700;flex:1">Usuarios internos</h2>
+      <button id="btn-nuevo-usuario" style="padding:var(--space-2) var(--space-5);background:var(--accent);color:#fff;border:none;border-radius:var(--radius);font-size:var(--text-sm);font-weight:600;cursor:pointer">+ Nuevo usuario</button>
+    </div>
+    <div id="usuarios-msg" style="display:none;margin-bottom:var(--space-3);padding:var(--space-2) var(--space-3);border-radius:var(--radius);font-size:var(--text-sm)"></div>
+    <table style="width:100%;border-collapse:collapse" id="usuarios-table">
+      <thead><tr>
+        <th style="text-align:left;font-size:var(--text-xs);font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;padding:var(--space-2) var(--space-3);border-bottom:2px solid var(--border)">Usuario</th>
+        <th style="text-align:left;font-size:var(--text-xs);font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;padding:var(--space-2) var(--space-3);border-bottom:2px solid var(--border)">Nombre / Sucursal</th>
+        <th style="text-align:left;font-size:var(--text-xs);font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;padding:var(--space-2) var(--space-3);border-bottom:2px solid var(--border)">Rol</th>
+        <th style="border-bottom:2px solid var(--border)"></th>
+      </tr></thead>
+      <tbody id="usuarios-tbody"><tr><td colspan="4" style="padding:var(--space-4);text-align:center;color:var(--text-muted)"><span class="spinner"></span></td></tr></tbody>
+    </table>
+  </div>
+  </main>
+
+  </main>
+
+  <!-- Modal usuario interno -->
+  <div id="overlay-user" style="position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;display:flex;align-items:center;justify-content:center;padding:var(--space-4);opacity:0;transition:opacity .2s;pointer-events:none">
+    <div style="background:var(--surface);border-radius:var(--radius-lg);max-width:440px;width:100%;padding:var(--space-6)">
+      <h2 id="umod-title" style="font-size:var(--text-lg);font-weight:700;margin-bottom:var(--space-5)">Nuevo usuario</h2>
+      <div id="umod-msg"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3)">
+        <div style="grid-column:1/-1">
+          <label style="display:block;font-size:var(--text-xs);font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:var(--space-1)">Usuario *</label>
+          <input id="umod-usuario" type="text" autocomplete="off" style="width:100%;padding:var(--space-2) var(--space-3);border:1px solid var(--border);border-radius:var(--radius);font-size:var(--text-sm);font-family:inherit" />
+        </div>
+        <div style="grid-column:1/-1">
+          <label style="display:block;font-size:var(--text-xs);font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:var(--space-1)">Nombre / Sucursal *</label>
+          <input id="umod-sucursal" type="text" placeholder="ej: Sucursal Centro" style="width:100%;padding:var(--space-2) var(--space-3);border:1px solid var(--border);border-radius:var(--radius);font-size:var(--text-sm);font-family:inherit" />
+        </div>
+        <div>
+          <label style="display:block;font-size:var(--text-xs);font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:var(--space-1)">Rol *</label>
+          <select id="umod-rol" style="width:100%;padding:var(--space-2) var(--space-3);border:1px solid var(--border);border-radius:var(--radius);font-size:var(--text-sm);font-family:inherit;background:var(--surface)">
+            <option value="encargado">Encargado</option>
+            <option value="empleado">Empleado</option>
+            <option value="ventas">Ventas</option>
+            <option value="deposito">Depósito</option>
+          </select>
+        </div>
+        <div>
+          <label style="display:block;font-size:var(--text-xs);font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:var(--space-1)">Contraseña</label>
+          <input id="umod-password" type="password" autocomplete="new-password" style="width:100%;padding:var(--space-2) var(--space-3);border:1px solid var(--border);border-radius:var(--radius);font-size:var(--text-sm);font-family:inherit" />
+        </div>
+      </div>
+      <div style="display:flex;gap:var(--space-3);justify-content:flex-end;margin-top:var(--space-5)">
+        <button id="btn-cancel-user" style="padding:var(--space-2) var(--space-5);border:1px solid var(--border);border-radius:var(--radius);font-size:var(--text-sm);background:none;color:var(--text-secondary);cursor:pointer">Cancelar</button>
+        <button id="btn-guardar-user" style="padding:var(--space-2) var(--space-5);background:var(--accent);color:#fff;border:none;border-radius:var(--radius);font-size:var(--text-sm);font-weight:600;cursor:pointer">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import auth    from './js/auth.js';
+    import storage from './js/storage.js';
+
+    const session = await auth.requireAuth();
+    if (!session) throw new Error('no session');
+    if (session.rol !== 'deposito') {
+      window.location.href = './deposito.html';
+      throw new Error('sin permiso');
+    }
+    document.getElementById('btn-logout').addEventListener('click', () => auth.logout());
+
+    // ── Cargar productos ────────────────────────────────────────
+    const token = sessionStorage.getItem('isumos_token');
+    const res = await fetch('/api/products', { headers: { Authorization: `Bearer ${token}` } });
+    let products = await res.json();
+
+    // Poblar select de categorías
+    const cats = [...new Set(products.map(p => p.categoria))].sort();
+    const catSelect = document.getElementById('cat-filter');
+    cats.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = opt.textContent = c;
+      catSelect.appendChild(opt);
+    });
+
+    // ── Render ──────────────────────────────────────────────────
+    function filtered() {
+      const q   = document.getElementById('search').value.trim().toLowerCase();
+      const cat = catSelect.value;
+      return products.filter(p =>
+        (!q   || p.nombre.toLowerCase().includes(q) || p.sku_interno.toLowerCase().includes(q)) &&
+        (!cat || p.categoria === cat)
+      );
+    }
+
+    function render() {
+      const list = filtered();
+      document.getElementById('count-bar').textContent =
+        `${list.length} de ${products.length} productos`;
+
+      if (!list.length) {
+        document.getElementById('table-wrap').innerHTML =
+          '<div class="empty-state">No hay productos que coincidan.</div>';
+        return;
+      }
+
+      document.getElementById('table-wrap').innerHTML = `
+        <table class="products-table">
+          <thead><tr>
+            <th>SKU</th><th>Producto</th><th>Categoría</th>
+            <th>Disponibilidad</th><th>Múltiplo</th><th></th>
+          </tr></thead>
+          <tbody>
+            ${list.map(p => `
+              <tr data-sku="${p.sku_interno}">
+                <td class="sku-cell">${p.sku_interno}</td>
+                <td class="nombre-cell">${p.nombre}</td>
+                <td class="cat-cell">${p.categoria ?? ''}</td>
+                <td>
+                  <select class="disp-select" data-val="${p.disponibilidad}">
+                    <option value="disponible"  ${p.disponibilidad === 'disponible'  ? 'selected' : ''}>Disponible</option>
+                    <option value="bajo_stock"  ${p.disponibilidad === 'bajo_stock'  ? 'selected' : ''}>Bajo stock</option>
+                    <option value="sin_stock"   ${p.disponibilidad === 'sin_stock'   ? 'selected' : ''}>Sin stock</option>
+                  </select>
+                </td>
+                <td>
+                  <input class="multiplo-input" type="number" min="1" value="${p.multiplo_minimo}" />
+                </td>
+                <td>
+                  <button class="btn-save" disabled>Guardar</button>
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`;
+
+      // Detectar cambios por fila
+      document.querySelectorAll('.products-table tbody tr').forEach(row => {
+        const sku     = row.dataset.sku;
+        const product = products.find(p => p.sku_interno === sku);
+        const selDisp = row.querySelector('.disp-select');
+        const inpMult = row.querySelector('.multiplo-input');
+        const btnSave = row.querySelector('.btn-save');
+
+        function checkChanged() {
+          const changed = selDisp.value !== product.disponibilidad ||
+                          parseInt(inpMult.value) !== product.multiplo_minimo;
+          btnSave.disabled = !changed;
+          btnSave.classList.remove('saved');
+          btnSave.textContent = 'Guardar';
+        }
+
+        selDisp.addEventListener('change', () => {
+          selDisp.dataset.val = selDisp.value;
+          checkChanged();
+        });
+        inpMult.addEventListener('input', checkChanged);
+
+        btnSave.addEventListener('click', async () => {
+          btnSave.disabled = true;
+          btnSave.textContent = 'Guardando…';
+          try {
+            await storage.updateProduct(sku, {
+              disponibilidad:  selDisp.value,
+              multiplo_minimo: parseInt(inpMult.value),
+            });
+            product.disponibilidad  = selDisp.value;
+            product.multiplo_minimo = parseInt(inpMult.value);
+            btnSave.textContent = '✓ Guardado';
+            btnSave.classList.add('saved');
+            setTimeout(() => { btnSave.textContent = 'Guardar'; btnSave.disabled = true; }, 2000);
+          } catch {
+            btnSave.disabled = false;
+            btnSave.textContent = 'Error — reintentar';
+          }
+        });
+      });
+    }
+
+    document.getElementById('search').addEventListener('input', render);
+    catSelect.addEventListener('change', render);
+    render();
+
+    // ── Import / Export ───────────────────────────────────────
+    const importSection = document.createElement('div');
+    importSection.style.cssText = 'margin-top:var(--space-10);padding-top:var(--space-6);border-top:1px solid var(--border)';
+    importSection.innerHTML = `
+      <h2 style="font-size:var(--text-base);font-weight:700;margin-bottom:var(--space-4)">Importar / Exportar catálogo</h2>
+      <div style="display:flex;gap:var(--space-4);flex-wrap:wrap;align-items:flex-start">
+        <div style="flex:1;min-width:280px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:var(--space-5)">
+          <div style="font-weight:600;margin-bottom:var(--space-2)">Exportar</div>
+          <p style="font-size:var(--text-sm);color:var(--text-muted);margin-bottom:var(--space-3)">Descargá el catálogo completo como CSV para editar en Excel.</p>
+          <a id="btn-export" href="/api/products/export" download="catalogo.csv"
+             style="display:inline-block;padding:8px 20px;background:var(--accent);color:#fff;border-radius:var(--radius);font-size:var(--text-sm);font-weight:600;text-decoration:none">
+            Descargar CSV
+          </a>
+        </div>
+        <div style="flex:1;min-width:280px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:var(--space-5)">
+          <div style="font-weight:600;margin-bottom:var(--space-2)">Importar</div>
+          <p style="font-size:var(--text-sm);color:var(--text-muted);margin-bottom:var(--space-1)">Subí un CSV con el mismo formato. Los SKUs existentes se actualizan, los nuevos se crean.</p>
+          <p style="font-size:11px;color:var(--text-muted);margin-bottom:var(--space-3)">Columnas: sku_interno, nombre, categoria, disponibilidad, tiempo_entrega_stock, tiempo_entrega_sin_stock, multiplo_minimo, y más.</p>
+          <input type="file" id="import-file" accept=".csv" style="margin-bottom:var(--space-2);font-size:var(--text-sm)" />
+          <button id="btn-import" style="display:block;padding:8px 20px;background:var(--success);color:#fff;border:none;border-radius:var(--radius);font-size:var(--text-sm);font-weight:600;cursor:pointer">
+            Importar
+          </button>
+          <div id="import-result" style="margin-top:var(--space-3);font-size:var(--text-sm)"></div>
+        </div>
+      </div>`;
+    document.querySelector('.main').appendChild(importSection);
+
+    // Fix export link with auth header via fetch
+    document.getElementById('btn-export').addEventListener('click', async e => {
+      e.preventDefault();
+      const r = await fetch('/api/products/export', { headers: { Authorization: `Bearer ${token}` } });
+      const blob = await r.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = 'catalogo.csv'; a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('btn-import').addEventListener('click', async () => {
+      const file = document.getElementById('import-file').files[0];
+      if (!file) { document.getElementById('import-result').textContent = 'Seleccioná un archivo CSV primero.'; return; }
+      const btn = document.getElementById('btn-import');
+      btn.disabled = true; btn.textContent = 'Importando…';
+      const form = new FormData();
+      form.append('file', file);
+      const r    = await fetch('/api/products/import', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
+      const data = await r.json();
+      const res  = document.getElementById('import-result');
+      if (data.ok) {
+        res.style.color = 'var(--success)';
+        res.textContent = `✓ Creados: ${data.creados} · Actualizados: ${data.actualizados} · Errores: ${data.errores}`;
+        const pr = await fetch('/api/products', { headers: { Authorization: `Bearer ${token}` } });
+        products = await pr.json();
+        render();
+      } else {
+        res.style.color = 'var(--danger)';
+        res.textContent = 'Error al importar.';
+      }
+      btn.disabled = false; btn.textContent = 'Importar';
+    });
+
+    // ── Tabs ──────────────────────────────────────────────────
+    document.querySelectorAll('.admin-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.admin-tab').forEach(t => {
+          t.style.borderBottomColor = 'transparent';
+          t.style.color = 'var(--text-muted)';
+        });
+        tab.style.borderBottomColor = 'var(--accent)';
+        tab.style.color = 'var(--accent)';
+        document.getElementById('panel-catalogo').style.display = tab.dataset.tab === 'catalogo' ? '' : 'none';
+        document.getElementById('panel-usuarios').style.display  = tab.dataset.tab === 'usuarios'  ? '' : 'none';
+        if (tab.dataset.tab === 'usuarios') loadUsuarios();
+      });
+    });
+
+    // ── Usuarios internos ─────────────────────────────────────
+    const ROL_LABELS = { encargado:'Encargado', empleado:'Empleado', deposito:'Depósito', ventas:'Ventas' };
+    const ROL_COLORS = { encargado:'var(--accent)', empleado:'var(--text-secondary)', deposito:'var(--success)', ventas:'var(--warning)' };
+    let editingUserId = null;
+
+    async function loadUsuarios() {
+      const r    = await fetch('/api/usuarios', { headers: { Authorization: `Bearer ${token}` } });
+      const list = (await r.json()).filter(u => u.rol !== 'cliente');
+      const tbody = document.getElementById('usuarios-tbody');
+
+      if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="4" style="padding:var(--space-4);text-align:center;color:var(--text-muted)">No hay usuarios.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = list.map(u => `
+        <tr data-uid="${u.id}">
+          <td style="padding:var(--space-3);border-bottom:1px solid var(--bg-subtle);font-weight:500">${u.usuario}</td>
+          <td style="padding:var(--space-3);border-bottom:1px solid var(--bg-subtle);color:var(--text-secondary)">${u.sucursal}</td>
+          <td style="padding:var(--space-3);border-bottom:1px solid var(--bg-subtle)">
+            <span style="font-size:var(--text-xs);font-weight:600;padding:2px 10px;border-radius:999px;background:${ROL_COLORS[u.rol]}22;color:${ROL_COLORS[u.rol]}">${ROL_LABELS[u.rol]||u.rol}</span>
+          </td>
+          <td style="padding:var(--space-3);border-bottom:1px solid var(--bg-subtle);text-align:right">
+            <button class="btn-edit-user" data-uid="${u.id}" data-usuario="${u.usuario}" data-sucursal="${u.sucursal}" data-rol="${u.rol}"
+              style="font-size:var(--text-xs);font-weight:600;padding:3px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:none;color:var(--text-secondary);cursor:pointer;margin-right:4px">
+              Editar
+            </button>
+            <button class="btn-del-user" data-uid="${u.id}" data-usuario="${u.usuario}"
+              style="font-size:var(--text-xs);font-weight:600;padding:3px 10px;border-radius:var(--radius-sm);border:1px solid var(--danger-light);background:var(--danger-light);color:var(--danger);cursor:pointer">
+              Eliminar
+            </button>
+          </td>
+        </tr>`).join('');
+
+      tbody.querySelectorAll('.btn-edit-user').forEach(btn => {
+        btn.addEventListener('click', () => openUserModal(btn.dataset));
+      });
+      tbody.querySelectorAll('.btn-del-user').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          if (!confirm(`¿Eliminar el usuario "${btn.dataset.usuario}"?`)) return;
+          const r = await fetch(`/api/usuarios/${btn.dataset.uid}`, {
+            method: 'DELETE', headers: { Authorization: `Bearer ${token}` }
+          });
+          const d = await r.json();
+          if (d.ok) loadUsuarios();
+          else showUsuarioMsg(d.motivo, 'err');
+        });
+      });
+    }
+
+    function openUserModal(data = {}) {
+      editingUserId = data.uid || null;
+      document.getElementById('umod-title').textContent   = editingUserId ? 'Editar usuario' : 'Nuevo usuario';
+      document.getElementById('umod-usuario').value       = data.usuario  || '';
+      document.getElementById('umod-sucursal').value      = data.sucursal || '';
+      document.getElementById('umod-rol').value           = data.rol      || 'encargado';
+      document.getElementById('umod-password').value      = '';
+      document.getElementById('umod-usuario').readOnly    = !!editingUserId;
+      document.getElementById('umod-password').placeholder = editingUserId ? 'Dejar vacío para no cambiar' : 'Contraseña';
+      showUsuarioMsg('', '');
+      document.getElementById('overlay-user').style.opacity = '1';
+      document.getElementById('overlay-user').style.pointerEvents = 'all';
+    }
+
+    function closeUserModal() {
+      document.getElementById('overlay-user').style.opacity = '0';
+      document.getElementById('overlay-user').style.pointerEvents = 'none';
+    }
+
+    function showUsuarioMsg(text, type) {
+      const el = document.getElementById('umod-msg');
+      if (!text) { el.style.display = 'none'; return; }
+      el.textContent = text;
+      el.style.cssText = `display:block;padding:var(--space-2) var(--space-3);border-radius:var(--radius);font-size:var(--text-sm);margin-bottom:var(--space-3);background:${type==='ok'?'var(--success-light)':'var(--danger-light)'};color:${type==='ok'?'var(--success)':'var(--danger)'}`;
+    }
+
+    document.getElementById('btn-nuevo-usuario').addEventListener('click', () => openUserModal());
+
+    document.getElementById('btn-guardar-user').addEventListener('click', async () => {
+      const usuario  = document.getElementById('umod-usuario').value.trim();
+      const sucursal = document.getElementById('umod-sucursal').value.trim();
+      const rol      = document.getElementById('umod-rol').value;
+      const password = document.getElementById('umod-password').value;
+
+      if (!sucursal || !rol) { showUsuarioMsg('Completá todos los campos', 'err'); return; }
+      if (!editingUserId && !password) { showUsuarioMsg('La contraseña es obligatoria', 'err'); return; }
+
+      const btn = document.getElementById('btn-guardar-user');
+      btn.disabled = true; btn.textContent = 'Guardando…';
+
+      const url    = editingUserId ? `/api/usuarios/${editingUserId}` : '/api/usuarios';
+      const method = editingUserId ? 'PATCH' : 'POST';
+      const body   = editingUserId
+        ? { sucursal, rol, ...(password ? { password } : {}) }
+        : { usuario, sucursal, rol, password };
+
+      const r = await fetch(url, {
+        method, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const d = await r.json();
+
+      if (d.ok) {
+        closeUserModal();
+        loadUsuarios();
+      } else {
+        const msgs = { usuario_existe: 'Ese usuario ya existe', campos_requeridos: 'Completá todos los campos', rol_invalido: 'Rol inválido', no_puede_editarse_a_si_mismo: 'No podés editarte a vos mismo' };
+        showUsuarioMsg(msgs[d.motivo] || d.motivo, 'err');
+      }
+      btn.disabled = false; btn.textContent = 'Guardar';
+    });
+
+    document.getElementById('btn-cancel-user').addEventListener('click', closeUserModal);
+    document.getElementById('overlay-user').addEventListener('click', e => {
+      if (e.target.id === 'overlay-user') closeUserModal();
+    });
+  </script>
+
+</body>
+</html>
