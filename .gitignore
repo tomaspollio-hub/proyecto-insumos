@@ -2,3 +2,6 @@
 server/isumos.db
 server/__pycache__/
 *.pyc
+.env
+tools/output/
+server/uploads/

@@ -21,9 +21,11 @@ from flask import Flask, Response, g, jsonify, request, send_from_directory, str
 from werkzeug.security import check_password_hash, generate_password_hash
 
 BASE_DIR          = Path(__file__).parent.parent
-DB_PATH           = Path(__file__).parent / 'isumos.db'
-UPLOADS_DIR       = Path(__file__).parent / 'uploads'
-PRODUCTOS_IMG_DIR = BASE_DIR / 'assets' / 'img' / 'productos'
+_data_env         = os.environ.get('DATA_DIR')
+_DATA_DIR         = Path(_data_env) if _data_env else Path(__file__).parent
+DB_PATH           = _DATA_DIR / 'isumos.db'
+UPLOADS_DIR       = _DATA_DIR / 'uploads'
+PRODUCTOS_IMG_DIR = (_DATA_DIR / 'img' / 'productos') if _data_env else (BASE_DIR / 'assets' / 'img' / 'productos')
 SECRET_KEY   = os.environ.get('ISUMOS_SECRET', 'dev-secret-change-in-prod')
 TOKEN_TTL    = int(os.environ.get('ISUMOS_TOKEN_TTL', 86400))
 
@@ -1077,6 +1079,10 @@ def _row_to_presupuesto(row):
     return d
 
 # ── Servir frontend ───────────────────────────────────────────────────────────
+
+@app.get('/assets/img/productos/<path:filename>')
+def serve_producto_img(filename):
+    return send_from_directory(str(PRODUCTOS_IMG_DIR), filename)
 
 @app.get('/')
 def index():
