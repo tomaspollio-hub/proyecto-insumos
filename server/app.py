@@ -66,36 +66,37 @@ def _needs_full_migration():
 def _apply_additive_migrations(db):
     """Migraciones seguras: solo agrega, nunca borra datos existentes."""
 
-    # ── Migrar rol CHECK de usuarios para incluir cliente y ventas ──
-    needs_role_migration = False
+    # ── Migrar rol CHECK de usuarios: quitar encargado y empleado ──
+    needs_role_cleanup = False
     try:
-        db.execute('SAVEPOINT sp_roles')
+        db.execute('SAVEPOINT sp_roles_v5')
         db.execute("INSERT INTO usuarios(id,sucursal_id,sucursal,usuario,password_hash,rol) "
-                   "VALUES ('_chk','_c','_c','_chk_usr','_c','cliente')")
-        db.execute("DELETE FROM usuarios WHERE id='_chk'")
-        db.execute('RELEASE SAVEPOINT sp_roles')
+                   "VALUES ('_chk2','_c','_c','_chk2_usr','_c','encargado')")
+        db.execute("DELETE FROM usuarios WHERE id='_chk2'")
+        db.execute('RELEASE SAVEPOINT sp_roles_v5')
+        needs_role_cleanup = True
     except Exception:
-        db.execute('ROLLBACK TO SAVEPOINT sp_roles')
-        db.execute('RELEASE SAVEPOINT sp_roles')
-        needs_role_migration = True
+        db.execute('ROLLBACK TO SAVEPOINT sp_roles_v5')
+        db.execute('RELEASE SAVEPOINT sp_roles_v5')
 
-    if needs_role_migration:
+    if needs_role_cleanup:
         db.executescript("""
-            CREATE TABLE IF NOT EXISTS usuarios_v4 (
+            CREATE TABLE IF NOT EXISTS usuarios_v5 (
                 id            TEXT PRIMARY KEY,
                 sucursal_id   TEXT NOT NULL,
                 sucursal      TEXT NOT NULL,
                 usuario       TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 rol           TEXT NOT NULL
-                              CHECK(rol IN ('encargado','empleado','deposito','cliente','ventas','gerente')),
+                              CHECK(rol IN ('deposito','cliente','ventas','gerente')),
                 empresa_id    TEXT
             );
-            INSERT OR IGNORE INTO usuarios_v4
-                SELECT id, sucursal_id, sucursal, usuario, password_hash, rol, NULL
-                FROM usuarios;
+            INSERT OR IGNORE INTO usuarios_v5
+                SELECT id, sucursal_id, sucursal, usuario, password_hash, rol, empresa_id
+                FROM usuarios
+                WHERE rol NOT IN ('encargado', 'empleado');
             DROP TABLE usuarios;
-            ALTER TABLE usuarios_v4 RENAME TO usuarios;
+            ALTER TABLE usuarios_v5 RENAME TO usuarios;
         """)
     else:
         try:
@@ -133,7 +134,7 @@ def init_db():
             usuario       TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             rol           TEXT NOT NULL
-                          CHECK(rol IN ('encargado','empleado','deposito','cliente','ventas','gerente')),
+                          CHECK(rol IN ('deposito','cliente','ventas','gerente')),
             empresa_id    TEXT
         );
 
@@ -252,39 +253,61 @@ def init_db():
     db.close()
 
 def _seed_usuarios(db):
-    raw = BASE_DIR / 'usuarios.json'
-    base = json.loads(raw.read_text()) if raw.exists() else []
-    for u in base:
-        db.execute(
-            'INSERT OR IGNORE INTO usuarios (id,sucursal_id,sucursal,usuario,password_hash,rol) VALUES (?,?,?,?,?,?)',
-            (str(uuid.uuid4()), u['id'], u['sucursal'], u['usuario'],
-             generate_password_hash(u['password']), u['rol'])
-        )
+    now = datetime.now(timezone.utc).isoformat()
+    # Usuarios operativos
     for usuario, sucursal_id, sucursal, password, rol in [
-        ('sur_jefe',  'suc003', 'Sucursal Sur',       'surjefe123',    'encargado'),
-        ('deposito',  'dep001', 'Depósito Central',   'deposito123',   'deposito'),
-        ('ventas1',   'ven001', 'Ventas',              'ventas123',     'ventas'),
-        ('gerente',   'ger001', 'Gerencia',            'gerente123',    'gerente'),
+        ('admin',    'ger001', 'Administración',   'admin123',    'gerente'),
+        ('deposito', 'dep001', 'Depósito Central', 'deposito123', 'deposito'),
+        ('ventas',   'ven001', 'Ventas',            'ventas123',   'ventas'),
     ]:
         db.execute(
             'INSERT OR IGNORE INTO usuarios (id,sucursal_id,sucursal,usuario,password_hash,rol) VALUES (?,?,?,?,?,?)',
-            (str(uuid.uuid4()), sucursal_id, sucursal, usuario,
-             generate_password_hash(password), rol)
+            (str(uuid.uuid4()), sucursal_id, sucursal, usuario, generate_password_hash(password), rol)
+        )
+    # Sucursales como clientes
+    for nombre, usuario, password in [
+        ('Sucursal Centro', 'centro', 'centro123'),
+        ('Sucursal Norte',  'norte',  'norte123'),
+        ('Sucursal Sur',    'sur',    'sur123'),
+    ]:
+        eid = f'emp_{usuario}'
+        db.execute(
+            'INSERT OR IGNORE INTO empresas (id,nombre,created_at) VALUES (?,?,?)',
+            (eid, nombre, now)
+        )
+        db.execute(
+            'INSERT OR IGNORE INTO usuarios (id,sucursal_id,sucursal,usuario,password_hash,rol,empresa_id) VALUES (?,?,?,?,?,?,?)',
+            (str(uuid.uuid4()), f'cli_{usuario}', nombre, usuario, generate_password_hash(password), 'cliente', eid)
         )
 
 def _ensure_default_users(db):
     """Agrega usuarios de roles nuevos si no existen. No toca los existentes."""
+    now = datetime.now(timezone.utc).isoformat()
     for usuario, sucursal_id, sucursal, password, rol in [
-        ('sur_jefe', 'suc003', 'Sucursal Sur',     'surjefe123',  'encargado'),
+        ('admin',    'ger001', 'Administración',   'admin123',    'gerente'),
         ('deposito', 'dep001', 'Depósito Central', 'deposito123', 'deposito'),
-        ('ventas1',  'ven001', 'Ventas',            'ventas123',   'ventas'),
-        ('gerente',  'ger001', 'Gerencia',          'gerente123',  'gerente'),
+        ('ventas',   'ven001', 'Ventas',            'ventas123',   'ventas'),
     ]:
         if not db.execute('SELECT id FROM usuarios WHERE usuario=?', (usuario,)).fetchone():
             db.execute(
                 'INSERT INTO usuarios (id,sucursal_id,sucursal,usuario,password_hash,rol) VALUES (?,?,?,?,?,?)',
-                (str(uuid.uuid4()), sucursal_id, sucursal, usuario,
-                 generate_password_hash(password), rol)
+                (str(uuid.uuid4()), sucursal_id, sucursal, usuario, generate_password_hash(password), rol)
+            )
+    for nombre, usuario, password in [
+        ('Sucursal Centro', 'centro', 'centro123'),
+        ('Sucursal Norte',  'norte',  'norte123'),
+        ('Sucursal Sur',    'sur',    'sur123'),
+    ]:
+        eid = f'emp_{usuario}'
+        if not db.execute('SELECT id FROM empresas WHERE id=?', (eid,)).fetchone():
+            db.execute(
+                'INSERT OR IGNORE INTO empresas (id,nombre,created_at) VALUES (?,?,?)',
+                (eid, nombre, now)
+            )
+        if not db.execute('SELECT id FROM usuarios WHERE usuario=?', (usuario,)).fetchone():
+            db.execute(
+                'INSERT INTO usuarios (id,sucursal_id,sucursal,usuario,password_hash,rol,empresa_id) VALUES (?,?,?,?,?,?,?)',
+                (str(uuid.uuid4()), f'cli_{usuario}', nombre, usuario, generate_password_hash(password), 'cliente', eid)
             )
     db.commit()
 
@@ -653,16 +676,9 @@ def get_orders():
     return jsonify([_row_to_order(r) for r in rows])
 
 @app.get('/api/orders/pending-approval')
-@require_auth(roles=['encargado'])
+@require_auth(roles=[])
 def get_pending_approval():
-    sucursal_id = request.args.get('sucursal')
-    if g.session['id'] != sucursal_id:
-        return jsonify({'ok': False, 'motivo': 'sin_permiso'}), 403
-    rows = get_db().execute(
-        "SELECT * FROM pedidos WHERE sucursal_id=? AND estado='pendiente_aprobacion' ORDER BY fecha",
-        (sucursal_id,)
-    ).fetchall()
-    return jsonify([_row_to_order(r) for r in rows])
+    return jsonify({'ok': False, 'motivo': 'modulo_desactivado'}), 410
 
 @app.post('/api/orders')
 @require_auth()
@@ -675,7 +691,7 @@ def create_order():
 
     ts       = datetime.now(timezone.utc)
     order_id = f"{session['id']}-{int(ts.timestamp()*1000)}-{uuid.uuid4().hex[:4].upper()}"
-    estado   = 'pendiente_aprobacion' if session['rol'] == 'empleado' else 'pendiente'
+    estado   = 'pendiente'
 
     order = {
         'id': order_id, 'sucursal_id': session['id'],
@@ -720,24 +736,17 @@ def get_all_orders():
     return jsonify([_row_to_order(r) for r in get_db().execute(query, params).fetchall()])
 
 @app.patch('/api/orders/<order_id>')
-@require_auth(roles=['deposito', 'encargado', 'gerente'])
+@require_auth(roles=['deposito', 'gerente'])
 def update_order_state(order_id):
     data    = request.get_json(silent=True) or {}
     estado  = data.get('estado')
-    session = g.session
     db      = get_db()
     row     = db.execute('SELECT * FROM pedidos WHERE id=?', (order_id,)).fetchone()
     if not row:
         return jsonify({'ok': False, 'motivo': 'not_found'}), 404
     order = dict(row)
-    if session['rol'] == 'encargado':
-        if order['sucursal_id'] != session['id']:
-            return jsonify({'ok': False, 'motivo': 'sin_permiso'}), 403
-        if order['estado'] != 'pendiente_aprobacion' or estado not in ('pendiente', 'rechazado'):
-            return jsonify({'ok': False, 'motivo': 'estado_invalido'}), 400
-    else:
-        if estado not in ('pendiente', 'preparando', 'despachado', 'recibido'):
-            return jsonify({'ok': False, 'motivo': 'estado_invalido'}), 400
+    if estado not in ('pendiente', 'preparando', 'despachado', 'recibido'):
+        return jsonify({'ok': False, 'motivo': 'estado_invalido'}), 400
     db.execute('UPDATE pedidos SET estado=? WHERE id=?', (estado, order_id))
     db.commit()
     _publish({'tipo': 'estado_actualizado', 'order_id': order_id,
@@ -1024,16 +1033,11 @@ def sse_events():
 
     def predicate(event):
         tipo = event.get('tipo')
-        # Módulo interno
         if rol == 'deposito':
-            return tipo in ('nuevo_pedido','estado_actualizado','catalogo_actualizado',
-                            'nuevo_presupuesto','presupuesto_aprobado','presupuesto_rechazado')
-        if rol == 'encargado':
-            return ((tipo == 'pedido_para_aprobar' and event.get('sucursal_id') == sid) or
-                    (tipo == 'estado_actualizado'  and event.get('sucursal_id') == sid))
-        if rol == 'empleado':
-            return tipo == 'estado_actualizado' and event.get('sucursal_id') == sid
-        # Módulo ventas
+            return tipo in ('presupuesto_aprobado', 'presupuesto_actualizado',
+                            'catalogo_actualizado', 'nuevo_presupuesto')
+        if rol == 'gerente':
+            return True
         if rol == 'ventas':
             return tipo in ('nuevo_presupuesto','presupuesto_aprobado','presupuesto_rechazado',
                             'nuevo_comentario') and event.get('para') in ('ventas', None)
@@ -1114,18 +1118,18 @@ def create_usuario():
     password = (data.get('password') or '').strip()
     rol      = (data.get('rol') or '').strip()
     sucursal = (data.get('sucursal') or '').strip()
-    ROLES_INTERNOS = ('encargado', 'empleado', 'deposito', 'ventas', 'gerente')
+    ROLES_OPERATIVOS = ('deposito', 'ventas', 'gerente')
 
     if not usuario or not password or not rol or not sucursal:
         return jsonify({'ok': False, 'motivo': 'campos_requeridos'}), 400
-    if rol not in ROLES_INTERNOS:
+    if rol not in ROLES_OPERATIVOS:
         return jsonify({'ok': False, 'motivo': 'rol_invalido'}), 400
 
     db = get_db()
     if db.execute('SELECT id FROM usuarios WHERE usuario=?', (usuario,)).fetchone():
         return jsonify({'ok': False, 'motivo': 'usuario_existe'}), 409
 
-    sucursal_id = f'suc_{usuario}' if rol in ('encargado', 'empleado') else f'{rol[:3]}_{usuario}'
+    sucursal_id = f'{rol[:3]}_{usuario}'
     uid = str(uuid.uuid4())
     db.execute(
         'INSERT INTO usuarios (id,sucursal_id,sucursal,usuario,password_hash,rol) VALUES (?,?,?,?,?,?)',
@@ -1152,7 +1156,7 @@ def update_usuario(uid):
         updates['sucursal'] = data['sucursal']
     if data.get('password'):
         updates['password_hash'] = generate_password_hash(data['password'])
-    if data.get('rol') and data['rol'] in ('encargado','empleado','deposito','ventas'):
+    if data.get('rol') and data['rol'] in ('deposito', 'ventas', 'gerente'):
         updates['rol'] = data['rol']
 
     if not updates:
