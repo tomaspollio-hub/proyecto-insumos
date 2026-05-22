@@ -126,11 +126,15 @@
 
   <!-- Panel catálogo -->
   <div id="panel-catalogo">
-    <div class="toolbar">
+    <div class="toolbar" style="flex-wrap:wrap;gap:var(--space-2)">
       <input class="search-input" id="search" type="search" placeholder="Buscar por nombre o SKU…" />
       <select class="cat-select" id="cat-filter">
         <option value="">Todas las categorías</option>
       </select>
+      <label style="display:flex;align-items:center;gap:6px;font-size:var(--text-sm);color:var(--text-secondary);cursor:pointer;white-space:nowrap">
+        <input type="checkbox" id="mostrar-ocultos"> Ver ocultos
+      </label>
+      <button id="btn-nuevo-producto" style="margin-left:auto;padding:var(--space-2) var(--space-4);background:var(--accent);color:#fff;border:none;border-radius:var(--radius);font-size:var(--text-sm);font-weight:600;cursor:pointer">+ Nuevo producto</button>
     </div>
     <div class="count-bar" id="count-bar"></div>
     <div id="table-wrap"><div class="empty-state"><span class="spinner"></span></div></div>
@@ -215,6 +219,56 @@
     </div>
   </div>
 
+  <!-- Modal nuevo producto -->
+  <div id="overlay-nuevo-prod" style="position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;display:flex;align-items:center;justify-content:center;padding:var(--space-4);opacity:0;transition:opacity .2s;pointer-events:none;overflow-y:auto">
+    <div style="background:var(--surface);border-radius:var(--radius-lg);max-width:560px;width:100%;padding:var(--space-6);margin:auto">
+      <h2 style="font-size:var(--text-lg);font-weight:700;margin-bottom:var(--space-5)">Nuevo producto</h2>
+      <div id="nprod-msg" style="font-size:var(--text-sm);margin-bottom:var(--space-3);min-height:1.2em"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3)">
+        <div>
+          <label style="display:block;font-size:var(--text-xs);font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:var(--space-1)">SKU interno *</label>
+          <input id="nprod-sku" type="text" style="width:100%;padding:var(--space-2) var(--space-3);border:1px solid var(--border);border-radius:var(--radius);font-size:var(--text-sm);font-family:inherit" />
+        </div>
+        <div>
+          <label style="display:block;font-size:var(--text-xs);font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:var(--space-1)">Código de barras</label>
+          <input id="nprod-barcode" type="text" style="width:100%;padding:var(--space-2) var(--space-3);border:1px solid var(--border);border-radius:var(--radius);font-size:var(--text-sm);font-family:inherit" />
+        </div>
+        <div style="grid-column:1/-1">
+          <label style="display:block;font-size:var(--text-xs);font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:var(--space-1)">Nombre *</label>
+          <input id="nprod-nombre" type="text" style="width:100%;padding:var(--space-2) var(--space-3);border:1px solid var(--border);border-radius:var(--radius);font-size:var(--text-sm);font-family:inherit" />
+        </div>
+        <div>
+          <label style="display:block;font-size:var(--text-xs);font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:var(--space-1)">Categoría</label>
+          <input id="nprod-categoria" type="text" placeholder="ej: Medicamentos" style="width:100%;padding:var(--space-2) var(--space-3);border:1px solid var(--border);border-radius:var(--radius);font-size:var(--text-sm);font-family:inherit" />
+        </div>
+        <div>
+          <label style="display:block;font-size:var(--text-xs);font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:var(--space-1)">Presentación</label>
+          <input id="nprod-presentacion" type="text" placeholder="ej: Caja x 30 comp." style="width:100%;padding:var(--space-2) var(--space-3);border:1px solid var(--border);border-radius:var(--radius);font-size:var(--text-sm);font-family:inherit" />
+        </div>
+        <div>
+          <label style="display:block;font-size:var(--text-xs);font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:var(--space-1)">Unidad de pedido</label>
+          <input id="nprod-unidad" type="text" placeholder="ej: caja, blister, unidad" style="width:100%;padding:var(--space-2) var(--space-3);border:1px solid var(--border);border-radius:var(--radius);font-size:var(--text-sm);font-family:inherit" />
+        </div>
+        <div>
+          <label style="display:block;font-size:var(--text-xs);font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:var(--space-1)">Múltiplo mínimo</label>
+          <input id="nprod-multiplo" type="number" min="1" value="1" style="width:100%;padding:var(--space-2) var(--space-3);border:1px solid var(--border);border-radius:var(--radius);font-size:var(--text-sm);font-family:inherit" />
+        </div>
+        <div>
+          <label style="display:block;font-size:var(--text-xs);font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:var(--space-1)">Entrega c/ stock</label>
+          <input id="nprod-te-stock" type="text" placeholder="24-48 hs" style="width:100%;padding:var(--space-2) var(--space-3);border:1px solid var(--border);border-radius:var(--radius);font-size:var(--text-sm);font-family:inherit" />
+        </div>
+        <div>
+          <label style="display:block;font-size:var(--text-xs);font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:var(--space-1)">Entrega s/ stock</label>
+          <input id="nprod-te-sinstock" type="text" placeholder="A consultar" style="width:100%;padding:var(--space-2) var(--space-3);border:1px solid var(--border);border-radius:var(--radius);font-size:var(--text-sm);font-family:inherit" />
+        </div>
+      </div>
+      <div style="display:flex;gap:var(--space-3);justify-content:flex-end;margin-top:var(--space-5)">
+        <button id="btn-cancel-nuevo-prod" style="padding:var(--space-2) var(--space-5);border:1px solid var(--border);border-radius:var(--radius);font-size:var(--text-sm);background:none;color:var(--text-secondary);cursor:pointer">Cancelar</button>
+        <button id="btn-guardar-nuevo-prod" style="padding:var(--space-2) var(--space-5);background:var(--accent);color:#fff;border:none;border-radius:var(--radius);font-size:var(--text-sm);font-weight:600;cursor:pointer">Crear producto</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal usuario interno -->
   <div id="overlay-user" style="position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;display:flex;align-items:center;justify-content:center;padding:var(--space-4);opacity:0;transition:opacity .2s;pointer-events:none">
     <div style="background:var(--surface);border-radius:var(--radius-lg);max-width:440px;width:100%;padding:var(--space-6)">
@@ -265,7 +319,7 @@
     // ── Cargar productos + demanda ──────────────────────────────
     const token = sessionStorage.getItem('isumos_token');
     const [res, resD] = await Promise.all([
-      fetch('/api/products',        { headers: { Authorization: `Bearer ${token}` } }),
+      fetch('/api/products?admin=1', { headers: { Authorization: `Bearer ${token}` } }),
       fetch('/api/products/demanda', { headers: { Authorization: `Bearer ${token}` } }),
     ]);
     let products = await res.json();
@@ -282,11 +336,13 @@
 
     // ── Render ──────────────────────────────────────────────────
     function filtered() {
-      const q   = document.getElementById('search').value.trim().toLowerCase();
-      const cat = catSelect.value;
+      const q          = document.getElementById('search').value.trim().toLowerCase();
+      const cat        = catSelect.value;
+      const verOcultos = document.getElementById('mostrar-ocultos').checked;
       return products.filter(p =>
-        (!q   || p.nombre.toLowerCase().includes(q) || p.sku_interno.toLowerCase().includes(q)) &&
-        (!cat || p.categoria === cat)
+        (!q          || p.nombre.toLowerCase().includes(q) || p.sku_interno.toLowerCase().includes(q)) &&
+        (!cat        || p.categoria === cat) &&
+        (verOcultos  || (p.visible ?? 1))
       );
     }
 
@@ -309,7 +365,7 @@
           </tr></thead>
           <tbody>
             ${list.map(p => `
-              <tr data-sku="${p.sku_interno}">
+              <tr data-sku="${p.sku_interno}" style="${(p.visible ?? 1) ? '' : 'opacity:0.45;background:var(--bg-subtle)'}">
                 <td class="sku-cell">${p.sku_interno}</td>
                 <td class="nombre-cell">
                   ${p.imagen ? `<img src="${p.imagen}" style="width:32px;height:32px;object-fit:contain;border-radius:4px;border:1px solid var(--border);vertical-align:middle;margin-right:6px">` : ''}${p.nombre}
@@ -326,9 +382,10 @@
                 <td>
                   <input class="multiplo-input" type="number" min="1" value="${p.multiplo_minimo}" />
                 </td>
-                <td style="display:flex;gap:6px;align-items:center">
+                <td style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
                   <button class="btn-save" disabled>Guardar</button>
                   <button class="btn-edit" data-sku="${p.sku_interno}" style="padding:4px 12px;font-size:var(--text-xs);border:1px solid var(--border);border-radius:var(--radius);background:none;color:var(--text-secondary);cursor:pointer">Editar</button>
+                  <button class="btn-toggle-visible" data-sku="${p.sku_interno}" data-visible="${p.visible ?? 1}" style="padding:4px 10px;font-size:var(--text-xs);border:1px solid var(--border);border-radius:var(--radius);background:none;cursor:pointer;color:${(p.visible ?? 1) ? 'var(--text-muted)' : 'var(--warning)'}">${(p.visible ?? 1) ? 'Ocultar' : 'Mostrar'}</button>
                 </td>
               </tr>`).join('')}
           </tbody>
@@ -375,8 +432,25 @@
           }
         });
         row.querySelector('.btn-edit').addEventListener('click', () => openEditModal(product));
+
+        row.querySelector('.btn-toggle-visible').addEventListener('click', async (e) => {
+          const btn        = e.currentTarget;
+          const curVisible = parseInt(btn.dataset.visible ?? '1');
+          const newVisible = curVisible ? 0 : 1;
+          btn.disabled = true;
+          try {
+            const r = await fetch(`/api/products/${sku}`, {
+              method: 'PATCH',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ visible: newVisible }),
+            });
+            if ((await r.json()).ok) { product.visible = newVisible; render(); }
+          } catch { /* silencio */ } finally { btn.disabled = false; }
+        });
       });
     }
+
+    document.getElementById('mostrar-ocultos').addEventListener('change', render);
 
     // ── Modal edición producto ────────────────────────────────
     function openEditModal(p) {
@@ -485,6 +559,65 @@
     document.getElementById('search').addEventListener('input', render);
     catSelect.addEventListener('change', render);
     render();
+
+    // ── Nuevo producto ────────────────────────────────────────
+    function openNuevoProd() {
+      ['sku','barcode','nombre','categoria','presentacion','unidad','te-stock','te-sinstock'].forEach(id => {
+        document.getElementById(`nprod-${id}`).value = '';
+      });
+      document.getElementById('nprod-multiplo').value = '1';
+      document.getElementById('nprod-msg').textContent = '';
+      const ov = document.getElementById('overlay-nuevo-prod');
+      ov.style.opacity = '1'; ov.style.pointerEvents = 'auto';
+    }
+    function closeNuevoProd() {
+      const ov = document.getElementById('overlay-nuevo-prod');
+      ov.style.opacity = '0'; ov.style.pointerEvents = 'none';
+    }
+
+    document.getElementById('btn-nuevo-producto').addEventListener('click', openNuevoProd);
+    document.getElementById('btn-cancel-nuevo-prod').addEventListener('click', closeNuevoProd);
+    document.getElementById('overlay-nuevo-prod').addEventListener('click', e => { if (e.target === e.currentTarget) closeNuevoProd(); });
+
+    document.getElementById('btn-guardar-nuevo-prod').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-guardar-nuevo-prod');
+      const msg = document.getElementById('nprod-msg');
+      const showErr = t => { msg.style.color = 'var(--danger)';  msg.textContent = t; };
+      const showOk  = t => { msg.style.color = 'var(--success)'; msg.textContent = t; };
+
+      const payload = {
+        sku_interno:              document.getElementById('nprod-sku').value.trim(),
+        codigo_barras:            document.getElementById('nprod-barcode').value.trim(),
+        nombre:                   document.getElementById('nprod-nombre').value.trim(),
+        categoria:                document.getElementById('nprod-categoria').value.trim() || 'General',
+        presentacion:             document.getElementById('nprod-presentacion').value.trim(),
+        unidad_pedido:            document.getElementById('nprod-unidad').value.trim() || 'unidad',
+        multiplo_minimo:          parseInt(document.getElementById('nprod-multiplo').value) || 1,
+        tiempo_entrega_stock:     document.getElementById('nprod-te-stock').value.trim() || '24-48 hs',
+        tiempo_entrega_sin_stock: document.getElementById('nprod-te-sinstock').value.trim() || 'A consultar',
+      };
+
+      if (!payload.sku_interno || !payload.nombre) { showErr('SKU y nombre son obligatorios.'); return; }
+
+      btn.disabled = true; btn.textContent = 'Creando…'; msg.textContent = '';
+      try {
+        const r = await fetch('/api/products', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const d = await r.json();
+        if (d.ok) {
+          showOk(`✓ Producto "${payload.nombre}" creado`);
+          const res2 = await fetch('/api/products?admin=1', { headers: { Authorization: `Bearer ${token}` } });
+          products = await res2.json();
+          setTimeout(() => { closeNuevoProd(); render(); }, 900);
+        } else {
+          showErr(d.motivo === 'sku_existente' ? 'Ese SKU ya existe.' : 'Error al crear el producto.');
+        }
+      } catch { showErr('Error de conexión.'); }
+      finally { btn.disabled = false; btn.textContent = 'Crear producto'; }
+    });
 
     // ── Import / Export ───────────────────────────────────────
     const importSection = document.createElement('div');

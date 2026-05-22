@@ -275,6 +275,7 @@ def _apply_additive_migrations(db):
     for stmt in [
         "ALTER TABLE productos ADD COLUMN tiempo_entrega_stock TEXT DEFAULT '24-48 hs'",
         "ALTER TABLE productos ADD COLUMN tiempo_entrega_sin_stock TEXT DEFAULT 'A consultar'",
+        "ALTER TABLE productos ADD COLUMN visible INTEGER DEFAULT 1",
     ]:
         try:
             db.execute(stmt)
@@ -630,7 +631,11 @@ def refresh_token():
 @app.get('/api/products')
 @require_auth()
 def get_products():
-    rows = get_db().execute('SELECT * FROM productos').fetchall()
+    is_admin = g.session.get('rol') in ('deposito', 'ventas', 'gerente')
+    if is_admin and request.args.get('admin') == '1':
+        rows = get_db().execute('SELECT * FROM productos').fetchall()
+    else:
+        rows = get_db().execute('SELECT * FROM productos WHERE COALESCE(visible,1)=1').fetchall()
     return jsonify([dict(r) for r in rows])
 
 @app.get('/api/products/demanda')
@@ -661,7 +666,7 @@ def update_product(sku):
     data    = request.get_json(silent=True) or {}
     allowed = {'disponibilidad', 'multiplo_minimo', 'nombre', 'descripcion',
                'tiempo_entrega_stock', 'tiempo_entrega_sin_stock',
-               'categoria', 'presentacion'}
+               'categoria', 'presentacion', 'visible'}
     updates = {k: v for k, v in data.items() if k in allowed}
     if not updates:
         return jsonify({'ok': False, 'motivo': 'sin_campos'}), 400
@@ -673,6 +678,35 @@ def update_product(sku):
     db.commit()
     _publish({'tipo': 'catalogo_actualizado', 'sku': sku, **updates})
     return jsonify({'ok': True})
+
+@app.post('/api/products')
+@require_auth(roles=['deposito', 'ventas', 'gerente'])
+def create_product():
+    data   = request.get_json(silent=True) or {}
+    sku    = (data.get('sku_interno') or '').strip()
+    nombre = (data.get('nombre') or '').strip()
+    if not sku or not nombre:
+        return jsonify({'ok': False, 'motivo': 'campos_requeridos'}), 400
+    db = get_db()
+    if db.execute('SELECT sku_interno FROM productos WHERE sku_interno=?', (sku,)).fetchone():
+        return jsonify({'ok': False, 'motivo': 'sku_existente'}), 409
+    db.execute("""
+        INSERT INTO productos
+        (sku_interno,codigo_barras,nombre,presentacion,unidad_pedido,
+         multiplo_minimo,categoria,descripcion,disponibilidad,
+         es_controlado,tiempo_entrega_stock,tiempo_entrega_sin_stock,visible)
+        VALUES (?,?,?,?,?,?,?,?,?,0,?,?,1)
+    """, (
+        sku, data.get('codigo_barras',''), nombre,
+        data.get('presentacion',''), data.get('unidad_pedido','unidad'),
+        int(data.get('multiplo_minimo') or 1),
+        data.get('categoria','General'), data.get('descripcion',''),
+        data.get('disponibilidad','disponible'),
+        data.get('tiempo_entrega_stock','24-48 hs'),
+        data.get('tiempo_entrega_sin_stock','A consultar'),
+    ))
+    db.commit()
+    return jsonify({'ok': True, 'sku': sku}), 201
 
 @app.get('/api/products/export')
 @require_auth(roles=['deposito', 'ventas', 'gerente'])
@@ -795,6 +829,7 @@ def import_products():
             errors += 1
 
     db.commit()
+    print(f'[IMPORT] Finalizado — creados:{created} actualizados:{updated} errores:{errors}', flush=True)
     return jsonify({'ok': True, 'creados': created, 'actualizados': updated, 'errores': errors})
 
 # ── Carrito interno ───────────────────────────────────────────────────────────
