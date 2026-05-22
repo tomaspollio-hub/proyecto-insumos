@@ -147,7 +147,7 @@
 <div class="toast" id="toast"></div>
 
 <script type="module">
-import { auth } from './js/auth.js';
+import auth from './js/auth.js';
 
 const ESTADOS_TAB = {
   pendiente:   'aprobado',
@@ -163,8 +163,9 @@ let currentTab   = 'pendiente';
 
 const session = await auth.getSession();
 if (!session || (session.rol !== 'deposito' && session.rol !== 'gerente')) {
-  window.location.href = './login.html';
+  window.location.replace('./login.html'); throw new Error();
 }
+const token = sessionStorage.getItem('isumos_token');
 document.getElementById('header-user').textContent = session.usuario;
 document.getElementById('btn-logout').addEventListener('click', async () => {
   await auth.logout();
@@ -175,7 +176,7 @@ document.getElementById('btn-logout').addEventListener('click', async () => {
 
 async function cargar() {
   try {
-    const r = await fetch('/api/presupuestos', { headers: auth.headers() });
+    const r = await fetch('/api/presupuestos', { headers: { Authorization: `Bearer ${token}` } });
     presupuestos = await r.json();
     render();
   } catch {
@@ -286,7 +287,7 @@ async function accion(pid, action, btn) {
   try {
     const r = await fetch(`/api/presupuestos/${pid}/estado`, {
       method: 'PATCH',
-      headers: { ...auth.headers(), 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ estado }),
     });
     if (!r.ok) throw new Error();
@@ -314,8 +315,7 @@ document.querySelectorAll('.tab').forEach(t => {
 // ── SSE ───────────────────────────────────────────────────────────────────────
 
 function connectSSE() {
-  const token = session.token;
-  const es    = new EventSource(`/api/events?token=${token}`);
+  const es = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
   es.onmessage = e => {
     const ev = JSON.parse(e.data);
     if (['presupuesto_aprobado','presupuesto_actualizado','nuevo_presupuesto'].includes(ev.tipo)) {
