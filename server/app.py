@@ -192,13 +192,9 @@ def set_security_headers(response):
     response.headers['X-Frame-Options']        = 'DENY'
     response.headers['Referrer-Policy']        = 'strict-origin-when-cross-origin'
     response.headers['Content-Security-Policy'] = (
-        "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline'; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-        "font-src 'self' https://fonts.gstatic.com; "
+        "frame-ancestors 'none'; "
         "img-src 'self' data:; "
-        "connect-src 'self'; "
-        "frame-ancestors 'none';"
+        "font-src 'self' https://fonts.gstatic.com;"
     )
     return response
 
