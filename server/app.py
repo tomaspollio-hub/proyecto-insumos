@@ -184,6 +184,24 @@ def _mail_estado_presupuesto(p: dict, estado: str) -> str:
     )
     return _MAIL_BASE.format(body=body)
 
+# ── Security headers ─────────────────────────────────────────────────────────
+
+@app.after_request
+def set_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options']        = 'DENY'
+    response.headers['Referrer-Policy']        = 'strict-origin-when-cross-origin'
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none';"
+    )
+    return response
+
 # ── DB ────────────────────────────────────────────────────────────────────────
 
 def get_db():
