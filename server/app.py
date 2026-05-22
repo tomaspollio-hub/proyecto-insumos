@@ -54,8 +54,9 @@ def _do_send(to: str, subject: str, html: str):
             s.starttls()
             s.login(MAIL_USER, MAIL_PASSWORD)
             s.sendmail(MAIL_USER, [to], msg.as_string())
-    except Exception:
-        pass
+        print(f'[MAIL] OK → {to} | {subject}', flush=True)
+    except Exception as e:
+        print(f'[MAIL] ERROR → {to} | {subject} | {type(e).__name__}: {e}', flush=True)
 
 def _send_email(to: str, subject: str, html: str):
     if not all([MAIL_HOST, MAIL_USER, MAIL_PASSWORD, to]):
