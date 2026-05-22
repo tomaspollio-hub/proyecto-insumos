@@ -10,8 +10,11 @@ import io
 import json
 import os
 import queue
+import smtplib
 import threading
 import uuid
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from datetime import datetime, timezone, timedelta
 from functools import wraps
 from pathlib import Path
@@ -29,7 +32,157 @@ PRODUCTOS_IMG_DIR = (_DATA_DIR / 'img' / 'productos') if _data_env else (BASE_DI
 SECRET_KEY   = os.environ.get('ISUMOS_SECRET', 'dev-secret-change-in-prod')
 TOKEN_TTL    = int(os.environ.get('ISUMOS_TOKEN_TTL', 86400))
 
+MAIL_HOST          = os.environ.get('MAIL_HOST', '')
+MAIL_PORT          = int(os.environ.get('MAIL_PORT', 587))
+MAIL_USER          = os.environ.get('MAIL_USER', '')
+MAIL_PASSWORD      = os.environ.get('MAIL_PASSWORD', '')
+MAIL_DEST_DEPOSITO = os.environ.get('MAIL_DEST_DEPOSITO', '')
+
 app = Flask(__name__, static_folder=str(BASE_DIR), static_url_path='')
+
+# ── Mail ─────────────────────────────────────────────────────────────────────
+
+def _do_send(to: str, subject: str, html: str):
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From']    = f'Isumos Farmacias Global <{MAIL_USER}>'
+        msg['To']      = to
+        msg.attach(MIMEText(html, 'html', 'utf-8'))
+        with smtplib.SMTP(MAIL_HOST, MAIL_PORT, timeout=15) as s:
+            s.ehlo()
+            s.starttls()
+            s.login(MAIL_USER, MAIL_PASSWORD)
+            s.sendmail(MAIL_USER, [to], msg.as_string())
+    except Exception:
+        pass
+
+def _send_email(to: str, subject: str, html: str):
+    if not all([MAIL_HOST, MAIL_USER, MAIL_PASSWORD, to]):
+        return
+    threading.Thread(target=_do_send, args=(to, subject, html), daemon=True).start()
+
+_MAIL_BASE = """
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#333">
+  <div style="background:#1a5276;color:white;padding:16px 24px;border-radius:6px 6px 0 0">
+    <strong style="font-size:18px">Isumos &mdash; Farmacias Global</strong>
+  </div>
+  <div style="border:1px solid #ddd;border-top:none;padding:24px;border-radius:0 0 6px 6px">
+    {body}
+  </div>
+  <p style="font-size:11px;color:#999;margin-top:12px;text-align:center">
+    Mensaje autom&aacute;tico del sistema Isumos. No responder a este correo.
+  </p>
+</div>
+"""
+
+def _mail_items_table(items: list, con_precios: bool = False) -> str:
+    header_precio = '<th style="padding:8px;text-align:right">Precio unit.</th>' if con_precios else ''
+    rows = ''
+    for it in items:
+        precio_td = ''
+        if con_precios:
+            p = it.get('precio_unitario')
+            precio_td = f'<td style="padding:6px 8px;text-align:right">{"${:,.2f}".format(p) if p else "—"}</td>'
+        rows += (
+            f'<tr style="border-bottom:1px solid #eee">'
+            f'<td style="padding:6px 8px">{it.get("nombre","")}</td>'
+            f'<td style="padding:6px 8px;text-align:center">{it.get("cantidad","")}</td>'
+            f'<td style="padding:6px 8px;color:#666">{it.get("unidad_pedido","")}</td>'
+            f'{precio_td}</tr>'
+        )
+    return (
+        '<table width="100%" cellspacing="0" style="border-collapse:collapse;margin-top:12px;font-size:14px">'
+        '<thead><tr style="background:#f5f5f5">'
+        '<th style="padding:8px;text-align:left">Producto</th>'
+        '<th style="padding:8px;text-align:center">Cantidad</th>'
+        '<th style="padding:8px;text-align:left">Unidad</th>'
+        f'{header_precio}'
+        f'</tr></thead><tbody>{rows}</tbody></table>'
+    )
+
+def _mail_nuevo_pedido(order: dict) -> str:
+    items = order['items'] if isinstance(order['items'], list) else json.loads(order['items'])
+    fecha = order['fecha'][:16].replace('T', ' ')
+    body = (
+        '<h2 style="margin-top:0;color:#1a5276">Nuevo pedido de reposici&oacute;n</h2>'
+        '<table style="font-size:14px">'
+        f'<tr><td style="color:#666;padding:2px 8px 2px 0">Sucursal:</td><td><strong>{order["sucursal_nombre"]}</strong></td></tr>'
+        f'<tr><td style="color:#666;padding:2px 8px 2px 0">Usuario:</td><td>{order["usuario"]}</td></tr>'
+        f'<tr><td style="color:#666;padding:2px 8px 2px 0">Fecha:</td><td>{fecha}</td></tr>'
+        f'<tr><td style="color:#666;padding:2px 8px 2px 0">N&deg; pedido:</td><td style="font-family:monospace;font-size:12px">{order["id"]}</td></tr>'
+        f'</table>{_mail_items_table(items)}'
+    )
+    return _MAIL_BASE.format(body=body)
+
+def _mail_nuevo_presupuesto(session: dict, items: list, notas: str) -> str:
+    nota_html = (
+        f'<p style="margin-top:12px;padding:10px;background:#fffbe6;border-left:3px solid #f0c040;font-size:14px">'
+        f'<strong>Nota del cliente:</strong> {notas}</p>'
+    ) if notas else ''
+    body = (
+        '<h2 style="margin-top:0;color:#1a5276">Nueva solicitud de presupuesto</h2>'
+        '<table style="font-size:14px">'
+        f'<tr><td style="color:#666;padding:2px 8px 2px 0">Empresa:</td><td><strong>{session["sucursal"]}</strong></td></tr>'
+        f'<tr><td style="color:#666;padding:2px 8px 2px 0">Usuario:</td><td>{session["usuario"]}</td></tr>'
+        f'</table>{_mail_items_table(items)}{nota_html}'
+    )
+    return _MAIL_BASE.format(body=body)
+
+def _mail_presupuesto_enviado(p: dict) -> str:
+    items = json.loads(p.get('items') or '[]')
+    condiciones = p.get('condiciones') or ''
+    notas       = p.get('notas_ventas') or ''
+    extras = ''
+    if condiciones:
+        extras += f'<p style="margin-top:12px;font-size:13px;color:#555"><strong>Condiciones:</strong> {condiciones}</p>'
+    if notas:
+        extras += f'<p style="font-size:13px;color:#555"><strong>Notas:</strong> {notas}</p>'
+    body = (
+        '<h2 style="margin-top:0;color:#1a5276">Su presupuesto est&aacute; listo</h2>'
+        f'<p style="font-size:14px">Estimado cliente de <strong>{p["empresa_nombre"]}</strong>,<br>'
+        'Su solicitud de presupuesto ha sido procesada y est&aacute; disponible para su revisi&oacute;n.</p>'
+        f'{_mail_items_table(items, con_precios=True)}{extras}'
+        '<p style="margin-top:20px;font-size:14px">Ingrese al portal para aprobar o rechazar el presupuesto.</p>'
+    )
+    return _MAIL_BASE.format(body=body)
+
+def _mail_presupuesto_aprobado(p: dict) -> str:
+    body = (
+        '<h2 style="margin-top:0;color:#27ae60">Presupuesto aprobado</h2>'
+        f'<p style="font-size:14px">El cliente <strong>{p["empresa_nombre"]}</strong> ha '
+        '<strong style="color:#27ae60">aprobado</strong> el presupuesto.</p>'
+        '<p style="font-size:14px">El pedido puede pasar a preparaci&oacute;n.</p>'
+    )
+    return _MAIL_BASE.format(body=body)
+
+def _mail_presupuesto_rechazado(p: dict, motivo: str) -> str:
+    motivo_html = (
+        f'<p style="padding:10px;background:#fdf2f0;border-left:3px solid #c0392b;font-size:14px">'
+        f'<strong>Motivo:</strong> {motivo}</p>'
+    ) if motivo else ''
+    body = (
+        '<h2 style="margin-top:0;color:#c0392b">Presupuesto rechazado</h2>'
+        f'<p style="font-size:14px">El cliente <strong>{p["empresa_nombre"]}</strong> ha '
+        '<strong style="color:#c0392b">rechazado</strong> el presupuesto.</p>'
+        f'{motivo_html}'
+    )
+    return _MAIL_BASE.format(body=body)
+
+def _mail_estado_presupuesto(p: dict, estado: str) -> str:
+    LABELS = {
+        'despachado': ('#2980b9', 'Su pedido fue despachado',
+                       'Su pedido ha sido despachado y est&aacute; en camino.'),
+        'entregado':  ('#27ae60', 'Su pedido fue entregado',
+                       '&iexcl;Su pedido ha sido entregado. Gracias por su compra!'),
+    }
+    color, titulo, mensaje = LABELS[estado]
+    body = (
+        f'<h2 style="margin-top:0;color:{color}">{titulo}</h2>'
+        f'<p style="font-size:14px">Estimado cliente de <strong>{p["empresa_nombre"]}</strong>,<br>'
+        f'{mensaje}</p>'
+    )
+    return _MAIL_BASE.format(body=body)
 
 # ── DB ────────────────────────────────────────────────────────────────────────
 
@@ -717,6 +870,9 @@ def create_order():
     else:
         _publish({'tipo': 'nuevo_pedido', 'sucursal_id': session['id'],
                   'order_id': order_id, 'sucursal_nombre': session['sucursal']})
+        _send_email(MAIL_DEST_DEPOSITO,
+                    f'[Isumos] Nuevo pedido — {session["sucursal"]}',
+                    _mail_nuevo_pedido(order))
     return jsonify({'ok': True, 'order': order}), 201
 
 @app.get('/api/orders/all')
@@ -894,6 +1050,9 @@ def create_presupuesto():
 
     _publish({'tipo': 'nuevo_presupuesto', 'presupuesto_id': pid,
               'empresa_nombre': session['sucursal'], 'usuario': session['usuario']})
+    _send_email(MAIL_USER,
+                f'[Isumos] Nueva solicitud de presupuesto — {session["sucursal"]}',
+                _mail_nuevo_presupuesto(session, items, data.get('notas_cliente', '')))
     return jsonify({'ok': True, 'id': pid}), 201
 
 @app.get('/api/presupuestos/<pid>')
@@ -953,6 +1112,11 @@ def enviar_presupuesto(pid):
     p = dict(row)
     _publish({'tipo': 'presupuesto_enviado', 'presupuesto_id': pid,
               'empresa_id': p['empresa_id']})
+    empresa = get_db().execute('SELECT email FROM empresas WHERE id=?', (p['empresa_id'],)).fetchone()
+    if empresa and empresa['email']:
+        _send_email(empresa['email'],
+                    f'[Isumos] Su presupuesto está listo — {p["empresa_nombre"]}',
+                    _mail_presupuesto_enviado(p))
     return jsonify({'ok': True})
 
 @app.post('/api/presupuestos/<pid>/aprobar')
@@ -974,6 +1138,9 @@ def aprobar_presupuesto(pid):
     db.commit()
     _publish({'tipo': 'presupuesto_aprobado', 'presupuesto_id': pid,
               'empresa_nombre': p['empresa_nombre']})
+    _send_email(MAIL_USER,
+                f'[Isumos] Presupuesto aprobado — {p["empresa_nombre"]}',
+                _mail_presupuesto_aprobado(p))
     return jsonify({'ok': True})
 
 @app.post('/api/presupuestos/<pid>/rechazar')
@@ -1000,6 +1167,9 @@ def rechazar_presupuesto(pid):
     db.commit()
     _publish({'tipo': 'presupuesto_rechazado', 'presupuesto_id': pid,
               'empresa_nombre': p['empresa_nombre']})
+    _send_email(MAIL_USER,
+                f'[Isumos] Presupuesto rechazado — {p["empresa_nombre"]}',
+                _mail_presupuesto_rechazado(p, motivo))
     return jsonify({'ok': True})
 
 @app.patch('/api/presupuestos/<pid>/estado')
@@ -1019,6 +1189,12 @@ def update_presupuesto_estado(pid):
     p = dict(row)
     _publish({'tipo': 'presupuesto_actualizado', 'presupuesto_id': pid,
               'empresa_id': p['empresa_id'], 'estado': estado})
+    if estado in ('despachado', 'entregado'):
+        empresa = get_db().execute('SELECT email FROM empresas WHERE id=?', (p['empresa_id'],)).fetchone()
+        if empresa and empresa['email']:
+            _send_email(empresa['email'],
+                        f'[Isumos] Su pedido fue {estado} — {p["empresa_nombre"]}',
+                        _mail_estado_presupuesto(p, estado))
     return jsonify({'ok': True, 'estado': estado})
 
 # ── SSE ───────────────────────────────────────────────────────────────────────
