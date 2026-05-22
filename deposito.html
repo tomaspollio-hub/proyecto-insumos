@@ -101,7 +101,7 @@
 <body>
 
 <header class="header">
-  <img class="header__logo" src="assets/img/logo.png" alt="Farmacias Global" />
+  <img class="header__logo" src="assets/img/logo-global.png" alt="Farmacias Global" />
   <span class="header__title">Depósito</span>
   <span class="header__sep"></span>
   <div class="header__user">
@@ -162,7 +162,7 @@ let currentTab   = 'pendiente';
 // ── Auth ─────────────────────────────────────────────────────────────────────
 
 const session = await auth.getSession();
-if (!session || session.rol !== 'deposito') {
+if (!session || (session.rol !== 'deposito' && session.rol !== 'gerente')) {
   window.location.href = './login.html';
 }
 document.getElementById('header-user').textContent = session.usuario;
