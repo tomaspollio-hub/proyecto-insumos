@@ -272,10 +272,12 @@ def _apply_additive_migrations(db):
         except Exception:
             pass
 
-    # ── Columnas nuevas en pedidos ──────────────────────────────────
+    # ── Columnas nuevas en pedidos y presupuestos ───────────────────
     for stmt in [
         "ALTER TABLE pedidos ADD COLUMN observaciones TEXT",
         "ALTER TABLE pedidos ADD COLUMN remito TEXT",
+        "ALTER TABLE presupuestos ADD COLUMN remito TEXT",
+        "ALTER TABLE presupuestos ADD COLUMN observaciones TEXT",
     ]:
         try:
             db.execute(stmt)
@@ -1254,7 +1256,12 @@ def update_presupuesto_estado(pid):
     row = db.execute('SELECT * FROM presupuestos WHERE id=?', (pid,)).fetchone()
     if not row:
         return jsonify({'ok': False, 'motivo': 'not_found'}), 404
-    db.execute('UPDATE presupuestos SET estado=? WHERE id=?', (estado, pid))
+    updates = {'estado': estado}
+    for field in ('remito', 'observaciones'):
+        if field in data:
+            updates[field] = data[field]
+    set_clause = ', '.join(f'{k}=?' for k in updates)
+    db.execute(f'UPDATE presupuestos SET {set_clause} WHERE id=?', [*updates.values(), pid])
     db.commit()
     p = dict(row)
     _publish({'tipo': 'presupuesto_actualizado', 'presupuesto_id': pid,
