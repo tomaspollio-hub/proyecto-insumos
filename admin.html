@@ -256,7 +256,7 @@
 
     const session = await auth.requireAuth();
     if (!session) throw new Error('no session');
-    if (session.rol !== 'deposito') {
+    if (session.rol !== 'deposito' && session.rol !== 'gerente') {
       window.location.href = './deposito.html';
       throw new Error('sin permiso');
     }
