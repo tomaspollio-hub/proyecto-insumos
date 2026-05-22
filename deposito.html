@@ -82,10 +82,23 @@
     .btn--despachar { background: #3b82f6; color: #fff; }
     .btn--entregar  { background: var(--success); color: #fff; }
 
+    /* ── Módulo tabs ── */
+    .modulo-tabs { display: flex; gap: var(--space-3); padding: var(--space-4) var(--space-6); background: var(--surface); border-bottom: 1px solid var(--border); }
+    .modulo-tab { font-size: var(--text-sm); font-weight: 600; padding: var(--space-2) var(--space-5); border-radius: 999px; border: 2px solid var(--border); background: none; color: var(--text-secondary); cursor: pointer; transition: all var(--transition); }
+    .modulo-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .modulo-tab:not(.active):hover { border-color: var(--accent); color: var(--accent); }
+
     /* ── Empty ── */
     .empty { text-align: center; padding: var(--space-16) var(--space-6); color: var(--text-muted); }
     .empty__icon { font-size: 2.5rem; margin-bottom: var(--space-3); }
     .empty__text { font-size: var(--text-base); }
+
+    /* ── Remito ── */
+    .remito-row { display: flex; gap: var(--space-2); align-items: center; margin-bottom: var(--space-2); }
+    .remito-input { flex: 1; padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: var(--text-sm); font-family: inherit; }
+    .remito-input:focus { outline: none; border-color: var(--accent); }
+    .obs-input { width: 100%; padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: var(--text-sm); font-family: inherit; margin-bottom: var(--space-2); resize: vertical; min-height: 48px; }
+    .obs-input:focus { outline: none; border-color: var(--accent); }
 
     /* ── Toast ── */
     .toast { position: fixed; bottom: var(--space-6); right: var(--space-6); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-3) var(--space-5); font-size: var(--text-sm); font-weight: 500; box-shadow: 0 4px 12px rgba(0,0,0,.15); z-index: 999; transform: translateY(120%); transition: transform .3s ease; }
@@ -110,6 +123,11 @@
   </div>
 </header>
 
+<div class="modulo-tabs">
+  <button class="modulo-tab active" data-modulo="sucursales">Pedidos sucursales</button>
+  <button class="modulo-tab" data-modulo="clientes">Clientes externos</button>
+</div>
+
 <main class="main">
   <div class="stats">
     <div class="stat-card stat--aprobado">
@@ -130,14 +148,14 @@
     <button class="tab active" data-tab="pendiente">
       Por preparar <span class="tab__count" id="tab-cnt-pendiente">0</span>
     </button>
-    <button class="tab" data-tab="preparacion">
+    <button class="tab" data-tab="preparando">
       En preparación <span class="tab__count" id="tab-cnt-preparacion">0</span>
     </button>
     <button class="tab" data-tab="despachado">
       Despachados <span class="tab__count" id="tab-cnt-despachado">0</span>
     </button>
-    <button class="tab" data-tab="entregado">
-      Entregados <span class="tab__count" id="tab-cnt-entregado">0</span>
+    <button class="tab" data-tab="recibido">
+      Recibidos <span class="tab__count" id="tab-cnt-entregado">0</span>
     </button>
   </div>
 
@@ -154,35 +172,59 @@
 <script type="module">
 import auth from './js/auth.js';
 
-const ESTADOS_TAB = {
-  pendiente:   'aprobado',
-  preparacion: 'en_preparacion',
-  despachado:  'despachado',
-  entregado:   'entregado',
-};
-
-let presupuestos = [];
-let currentTab   = 'pendiente';
-
-// ── Auth ─────────────────────────────────────────────────────────────────────
-
+// ── Auth ──────────────────────────────────────────────────────────────────────
 const session = await auth.getSession();
 if (!session || (session.rol !== 'deposito' && session.rol !== 'gerente')) {
   window.location.replace('./login.html'); throw new Error();
 }
 const token = sessionStorage.getItem('isumos_token');
 document.getElementById('header-user').textContent = session.usuario;
-document.getElementById('btn-logout').addEventListener('click', async () => {
-  await auth.logout();
-  window.location.href = './login.html';
-});
+document.getElementById('btn-logout').addEventListener('click', () => auth.logout());
 
-// ── Carga de datos ────────────────────────────────────────────────────────────
+// ── Estado ────────────────────────────────────────────────────────────────────
+let modulo      = 'sucursales';   // 'sucursales' | 'clientes'
+let currentTab  = 'pendiente';
+let pedidos     = [];   // internos de sucursales
+let presupuestos = [];  // externos de clientes
 
+const CONFIG = {
+  sucursales: {
+    tabs: {
+      pendiente:   { label: 'Por preparar',    estado: 'pendiente'  },
+      preparando:  { label: 'En preparación',  estado: 'preparando' },
+      despachado:  { label: 'Despachados',     estado: 'despachado' },
+      recibido:    { label: 'Recibidos',        estado: 'recibido'   },
+    },
+    stats: [
+      { id: 'cnt-aprobado',   label: 'Por preparar',   estado: 'pendiente',   cls: 'stat--aprobado'   },
+      { id: 'cnt-prep',       label: 'En preparación', estado: 'preparando',  cls: 'stat--prep'       },
+      { id: 'cnt-despachado', label: 'Despachados',    estado: 'despachado',  cls: 'stat--despachado' },
+    ],
+  },
+  clientes: {
+    tabs: {
+      pendiente:   { label: 'Por preparar',    estado: 'aprobado'        },
+      preparando:  { label: 'En preparación',  estado: 'en_preparacion'  },
+      despachado:  { label: 'Despachados',     estado: 'despachado'      },
+      recibido:    { label: 'Entregados',       estado: 'entregado'       },
+    },
+    stats: [
+      { id: 'cnt-aprobado',   label: 'Por preparar',   estado: 'aprobado',        cls: 'stat--aprobado'   },
+      { id: 'cnt-prep',       label: 'En preparación', estado: 'en_preparacion',  cls: 'stat--prep'       },
+      { id: 'cnt-despachado', label: 'Despachados',    estado: 'despachado',      cls: 'stat--despachado' },
+    ],
+  },
+};
+
+// ── Cargar datos ──────────────────────────────────────────────────────────────
 async function cargar() {
   try {
-    const r = await fetch('/api/presupuestos', { headers: { Authorization: `Bearer ${token}` } });
-    presupuestos = await r.json();
+    const [rP, rI] = await Promise.all([
+      fetch('/api/presupuestos',  { headers: { Authorization: `Bearer ${token}` } }),
+      fetch('/api/orders/all',    { headers: { Authorization: `Bearer ${token}` } }),
+    ]);
+    presupuestos = await rP.json();
+    pedidos      = await rI.json();
     render();
   } catch {
     document.getElementById('cards-list').innerHTML =
@@ -191,113 +233,156 @@ async function cargar() {
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
-
 function render() {
-  updateCounts();
-  const estado   = ESTADOS_TAB[currentTab];
-  const filtrados = presupuestos.filter(p => p.estado === estado);
-  const list     = document.getElementById('cards-list');
+  const cfg     = CONFIG[modulo];
+  const dataset = modulo === 'sucursales' ? pedidos : presupuestos;
+  const tabCfg  = cfg.tabs[currentTab];
+  if (!tabCfg) return;
 
+  // Stats
+  const statIds = {
+    'cnt-aprobado':   cfg.stats[0].estado,
+    'cnt-prep':       cfg.stats[1].estado,
+    'cnt-despachado': cfg.stats[2].estado,
+  };
+  Object.entries(statIds).forEach(([id, estado]) => {
+    document.getElementById(id).textContent = dataset.filter(x => x.estado === estado).length;
+  });
+
+  // Sub-tab counts
+  const tabEstados = Object.values(cfg.tabs).map(t => t.estado);
+  const cntIds = ['tab-cnt-pendiente', 'tab-cnt-preparacion', 'tab-cnt-despachado', 'tab-cnt-entregado'];
+  cntIds.forEach((id, i) => {
+    document.getElementById(id).textContent = dataset.filter(x => x.estado === tabEstados[i]).length;
+  });
+
+  const filtrados = dataset
+    .filter(x => x.estado === tabCfg.estado)
+    .sort((a, b) => new Date(a.fecha || a.fecha_solicitud) - new Date(b.fecha || b.fecha_solicitud));
+
+  const list = document.getElementById('cards-list');
   if (!filtrados.length) {
-    list.innerHTML = `<div class="empty">
-      <div class="empty__icon">📦</div>
-      <div class="empty__text">No hay pedidos en esta etapa.</div>
-    </div>`;
+    list.innerHTML = `<div class="empty"><div class="empty__icon">📦</div><div class="empty__text">No hay pedidos en esta etapa.</div></div>`;
     return;
   }
 
-  list.innerHTML = filtrados
-    .sort((a, b) => new Date(a.fecha_solicitud) - new Date(b.fecha_solicitud))
-    .map(p => cardHTML(p))
-    .join('');
+  list.innerHTML = filtrados.map(item =>
+    modulo === 'sucursales' ? cardHTMLInterno(item) : cardHTMLCliente(item)
+  ).join('');
 
   list.querySelectorAll('[data-action]').forEach(btn => {
-    btn.addEventListener('click', () => accion(btn.dataset.pid, btn.dataset.action, btn));
+    btn.addEventListener('click', () => accion(btn.dataset.pid, btn.dataset.action, btn, modulo));
   });
 }
 
-function updateCounts() {
-  const cnt = { aprobado: 0, en_preparacion: 0, despachado: 0, entregado: 0 };
-  presupuestos.forEach(p => { if (cnt[p.estado] !== undefined) cnt[p.estado]++; });
-
-  document.getElementById('cnt-aprobado').textContent    = cnt.aprobado;
-  document.getElementById('cnt-prep').textContent        = cnt.en_preparacion;
-  document.getElementById('cnt-despachado').textContent  = cnt.despachado;
-
-  document.getElementById('tab-cnt-pendiente').textContent    = cnt.aprobado;
-  document.getElementById('tab-cnt-preparacion').textContent  = cnt.en_preparacion;
-  document.getElementById('tab-cnt-despachado').textContent   = cnt.despachado;
-  document.getElementById('tab-cnt-entregado').textContent    = cnt.entregado;
-}
-
-function cardHTML(p) {
+// ── Card cliente externo (presupuesto) ────────────────────────────────────────
+function cardHTMLCliente(p) {
   const fecha    = new Date(p.fecha_aprobacion || p.fecha_solicitud).toLocaleDateString('es-AR');
   const items    = (typeof p.items === 'string' ? JSON.parse(p.items) : p.items) || [];
-  const badgeMap = {
-    aprobado:       ['badge--aprobado',    'Aprobado'],
-    en_preparacion: ['badge--preparacion', 'En preparación'],
-    despachado:     ['badge--despachado',  'Despachado'],
-    entregado:      ['badge--entregado',   'Entregado'],
-  };
-  const [badgeCls, badgeTxt] = badgeMap[p.estado] || ['', p.estado];
+  const badgeMap = { aprobado:['badge--aprobado','Aprobado'], en_preparacion:['badge--preparacion','En preparación'], despachado:['badge--despachado','Despachado'], entregado:['badge--entregado','Entregado'] };
+  const [cls, txt] = badgeMap[p.estado] || ['', p.estado];
 
-  const itemsRows = items.map(i => `
-    <tr>
-      <td>${i.nombre || i.sku_interno || ''}</td>
-      <td>${i.presentacion || ''}</td>
-      <td class="qty">${i.qty ?? i.cantidad ?? ''} ${i.unidad_pedido || ''}</td>
-    </tr>`).join('');
+  const rows = items.map(i => `<tr><td>${i.nombre||i.sku_interno||''}</td><td>${i.presentacion||''}</td><td class="qty">${i.qty??i.cantidad??''} ${i.unidad_pedido||''}</td></tr>`).join('');
 
   let accionBtn = '';
   if (p.estado === 'aprobado')
     accionBtn = `<button class="btn-action btn--preparar" data-pid="${p.id}" data-action="preparar">Comenzar preparación</button>`;
   if (p.estado === 'en_preparacion')
-    accionBtn = `<button class="btn-action btn--despachar" data-pid="${p.id}" data-action="despachar">Marcar despachado</button>`;
+    accionBtn = `<div class="remito-row"><input class="remito-input" placeholder="N° remito (opcional)" id="remito-${p.id}"></div><button class="btn-action btn--despachar" data-pid="${p.id}" data-action="despachar">Marcar despachado</button>`;
   if (p.estado === 'despachado')
     accionBtn = `<button class="btn-action btn--entregar" data-pid="${p.id}" data-action="entregar">Confirmar entrega</button>`;
 
-  return `
-  <div class="card" id="card-${p.id}">
+  return `<div class="card" id="card-${p.id}">
     <div class="card__body">
       <div class="card__header">
-        <span class="card__empresa">${p.empresa_nombre || '—'}</span>
-        <span class="badge ${badgeCls}">${badgeTxt}</span>
+        <span class="card__empresa">${p.empresa_nombre||'—'}</span>
+        <span class="badge ${cls}">${txt}</span>
         <span class="card__id">#${p.id.slice(0,8).toUpperCase()}</span>
         <span class="card__fecha">${fecha}</span>
       </div>
-      ${p.usuario_cliente ? `<div class="card__cliente">Contacto: ${p.usuario_cliente}</div>` : ''}
-      ${p.condiciones ? `<div class="card__cliente" style="margin-top:4px">Condiciones: ${p.condiciones}</div>` : ''}
-      <table class="items">
-        <thead><tr><th>Producto</th><th>Presentación</th><th style="text-align:right">Cantidad</th></tr></thead>
-        <tbody>${itemsRows}</tbody>
-      </table>
+      ${p.usuario_cliente?`<div class="card__cliente">Contacto: ${p.usuario_cliente}</div>`:''}
+      ${p.condiciones?`<div class="card__cliente" style="margin-top:4px">Condiciones: ${p.condiciones}</div>`:''}
+      <table class="items"><thead><tr><th>Producto</th><th>Presentación</th><th style="text-align:right">Cantidad</th></tr></thead><tbody>${rows}</tbody></table>
     </div>
-    <div class="card__actions">
-      ${accionBtn}
+    <div class="card__actions">${accionBtn}</div>
+  </div>`;
+}
+
+// ── Card pedido interno (sucursal) ────────────────────────────────────────────
+function cardHTMLInterno(p) {
+  const fecha  = new Date(p.fecha).toLocaleDateString('es-AR');
+  const items  = (typeof p.items === 'string' ? JSON.parse(p.items) : p.items) || [];
+  const badgeMap = { pendiente:['badge--aprobado','Pendiente'], preparando:['badge--preparacion','En preparación'], despachado:['badge--despachado','Despachado'], recibido:['badge--entregado','Recibido'] };
+  const [cls, txt] = badgeMap[p.estado] || ['', p.estado];
+
+  const rows = items.map(i => `<tr><td>${i.nombre||i.sku||''}</td><td>${i.presentacion||''}</td><td class="qty">${i.qty??i.cantidad??''} ${i.unidad_pedido||''}</td></tr>`).join('');
+
+  let accionBtn = '';
+  if (p.estado === 'pendiente')
+    accionBtn = `<button class="btn-action btn--preparar" data-pid="${p.id}" data-action="int-preparar">Comenzar preparación</button>`;
+  if (p.estado === 'preparando')
+    accionBtn = `<div class="remito-row"><input class="remito-input" placeholder="N° remito (opcional)" id="remito-${p.id}"></div><textarea class="obs-input" id="obs-${p.id}" placeholder="Observaciones (ej: faltó ítem X)"></textarea><button class="btn-action btn--despachar" data-pid="${p.id}" data-action="int-despachar">Marcar despachado</button>`;
+  if (p.estado === 'despachado')
+    accionBtn = `<button class="btn-action btn--entregar" data-pid="${p.id}" data-action="int-entregar">Confirmar recepción</button>`;
+
+  const remitoInfo = p.remito ? `<div class="card__cliente">Remito: <strong>${p.remito}</strong></div>` : '';
+  const obsInfo    = p.observaciones ? `<div class="card__cliente" style="color:var(--warning)">Obs: ${p.observaciones}</div>` : '';
+
+  return `<div class="card" id="card-${p.id}">
+    <div class="card__body">
+      <div class="card__header">
+        <span class="card__empresa">${p.sucursal_nombre||'—'}</span>
+        <span class="badge ${cls}">${txt}</span>
+        <span class="card__id">#${p.id.slice(-6).toUpperCase()}</span>
+        <span class="card__fecha">${fecha}</span>
+      </div>
+      <div class="card__cliente">Usuario: ${p.usuario||'—'}</div>
+      ${remitoInfo}${obsInfo}
+      <table class="items"><thead><tr><th>Producto</th><th>Presentación</th><th style="text-align:right">Cantidad</th></tr></thead><tbody>${rows}</tbody></table>
     </div>
+    <div class="card__actions">${accionBtn}</div>
   </div>`;
 }
 
 // ── Acciones ──────────────────────────────────────────────────────────────────
-
-const ACCION_ESTADO = {
-  preparar:  'en_preparacion',
-  despachar: 'despachado',
-  entregar:  'entregado',
-};
-
-async function accion(pid, action, btn) {
-  const estado = ACCION_ESTADO[action];
+async function accion(pid, action, btn, tipo) {
   btn.disabled = true;
   try {
-    const r = await fetch(`/api/presupuestos/${pid}/estado`, {
-      method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ estado }),
-    });
-    if (!r.ok) throw new Error();
-    const p = presupuestos.find(x => x.id === pid);
-    if (p) p.estado = estado;
+    if (tipo === 'clientes') {
+      const estadoMap = { preparar: 'en_preparacion', despachar: 'despachado', entregar: 'entregado' };
+      const estado = estadoMap[action];
+      const body = { estado };
+      if (action === 'despachar') {
+        const remito = document.getElementById(`remito-${pid}`)?.value.trim();
+        if (remito) body.remito = remito;
+      }
+      const r = await fetch(`/api/presupuestos/${pid}/estado`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new Error();
+      const p = presupuestos.find(x => x.id === pid);
+      if (p) { p.estado = estado; if (body.remito) p.remito = body.remito; }
+    } else {
+      const estadoMap = { 'int-preparar': 'preparando', 'int-despachar': 'despachado', 'int-entregar': 'recibido' };
+      const estado = estadoMap[action];
+      const body = { estado };
+      if (action === 'int-despachar') {
+        const remito = document.getElementById(`remito-${pid}`)?.value.trim();
+        const obs    = document.getElementById(`obs-${pid}`)?.value.trim();
+        if (remito) body.remito = remito;
+        if (obs)    body.observaciones = obs;
+      }
+      const r = await fetch(`/api/orders/${pid}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new Error();
+      const p = pedidos.find(x => x.id === pid);
+      if (p) { p.estado = estado; if (body.remito) p.remito = body.remito; if (body.observaciones) p.observaciones = body.observaciones; }
+    }
     render();
     toast('Estado actualizado');
   } catch {
@@ -306,8 +391,21 @@ async function accion(pid, action, btn) {
   }
 }
 
-// ── Tabs ──────────────────────────────────────────────────────────────────────
+// ── Módulo tabs ───────────────────────────────────────────────────────────────
+document.querySelectorAll('.modulo-tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.modulo-tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    modulo     = t.dataset.modulo;
+    currentTab = 'pendiente';
+    document.querySelectorAll('.tab').forEach((el, i) => {
+      el.classList.toggle('active', i === 0);
+    });
+    render();
+  });
+});
 
+// ── Sub-tabs ──────────────────────────────────────────────────────────────────
 document.querySelectorAll('.tab').forEach(t => {
   t.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
@@ -318,12 +416,12 @@ document.querySelectorAll('.tab').forEach(t => {
 });
 
 // ── SSE ───────────────────────────────────────────────────────────────────────
-
 function connectSSE() {
   const es = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
   es.onmessage = e => {
     const ev = JSON.parse(e.data);
-    if (['presupuesto_aprobado','presupuesto_actualizado','nuevo_presupuesto'].includes(ev.tipo)) {
+    if (['presupuesto_aprobado','presupuesto_actualizado','nuevo_presupuesto',
+         'nuevo_pedido','estado_actualizado'].includes(ev.tipo)) {
       cargar();
     }
   };
@@ -331,15 +429,12 @@ function connectSSE() {
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
-
 function toast(msg) {
   const el = document.getElementById('toast');
   el.textContent = msg;
   el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), 2800);
 }
-
-// ── Init ──────────────────────────────────────────────────────────────────────
 
 await cargar();
 connectSSE();

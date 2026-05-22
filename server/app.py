@@ -272,6 +272,16 @@ def _apply_additive_migrations(db):
         except Exception:
             pass
 
+    # ── Columnas nuevas en pedidos ──────────────────────────────────
+    for stmt in [
+        "ALTER TABLE pedidos ADD COLUMN observaciones TEXT",
+        "ALTER TABLE pedidos ADD COLUMN remito TEXT",
+    ]:
+        try:
+            db.execute(stmt)
+        except Exception:
+            pass
+
     # ── Columnas nuevas en productos ────────────────────────────────
     for stmt in [
         "ALTER TABLE productos ADD COLUMN tiempo_entrega_stock TEXT DEFAULT '24-48 hs'",
@@ -944,23 +954,33 @@ def get_all_orders():
 @app.patch('/api/orders/<order_id>')
 @require_auth(roles=['deposito', 'gerente'])
 def update_order_state(order_id):
-    data    = request.get_json(silent=True) or {}
-    estado  = data.get('estado')
-    db      = get_db()
-    row     = db.execute('SELECT * FROM pedidos WHERE id=?', (order_id,)).fetchone()
+    data  = request.get_json(silent=True) or {}
+    db    = get_db()
+    row   = db.execute('SELECT * FROM pedidos WHERE id=?', (order_id,)).fetchone()
     if not row:
         return jsonify({'ok': False, 'motivo': 'not_found'}), 404
-    order = dict(row)
-    if estado not in ('pendiente', 'preparando', 'despachado', 'recibido'):
-        return jsonify({'ok': False, 'motivo': 'estado_invalido'}), 400
-    db.execute('UPDATE pedidos SET estado=? WHERE id=?', (estado, order_id))
+    order   = dict(row)
+    updates = {}
+    if 'estado' in data:
+        if data['estado'] not in ('pendiente', 'preparando', 'despachado', 'recibido'):
+            return jsonify({'ok': False, 'motivo': 'estado_invalido'}), 400
+        updates['estado'] = data['estado']
+    for field in ('observaciones', 'remito'):
+        if field in data:
+            updates[field] = data[field]
+    if not updates:
+        return jsonify({'ok': False, 'motivo': 'sin_campos'}), 400
+    set_clause = ', '.join(f'{k}=?' for k in updates)
+    db.execute(f'UPDATE pedidos SET {set_clause} WHERE id=?', [*updates.values(), order_id])
     db.commit()
-    _publish({'tipo': 'estado_actualizado', 'order_id': order_id,
-              'sucursal_id': order['sucursal_id'], 'estado': estado})
-    if estado == 'pendiente':
-        _publish({'tipo': 'nuevo_pedido', 'sucursal_id': order['sucursal_id'],
-                  'order_id': order_id, 'sucursal_nombre': order['sucursal_nombre']})
-    return jsonify({'ok': True, 'estado': estado})
+    if 'estado' in updates:
+        nuevo_estado = updates['estado']
+        _publish({'tipo': 'estado_actualizado', 'order_id': order_id,
+                  'sucursal_id': order['sucursal_id'], 'estado': nuevo_estado})
+        if nuevo_estado == 'pendiente':
+            _publish({'tipo': 'nuevo_pedido', 'sucursal_id': order['sucursal_id'],
+                      'order_id': order_id, 'sucursal_nombre': order['sucursal_nombre']})
+    return jsonify({'ok': True, 'estado': updates.get('estado', order['estado'])})
 
 # ══════════════════════════════════════════════════════════════════════════════
 # MÓDULO VENTAS (nuevo Etapa 4)
@@ -1261,7 +1281,8 @@ def sse_events():
         tipo = event.get('tipo')
         if rol == 'deposito':
             return tipo in ('presupuesto_aprobado', 'presupuesto_actualizado',
-                            'catalogo_actualizado', 'nuevo_presupuesto')
+                            'catalogo_actualizado', 'nuevo_presupuesto',
+                            'nuevo_pedido', 'estado_actualizado')
         if rol == 'gerente':
             return True
         if rol == 'ventas':
