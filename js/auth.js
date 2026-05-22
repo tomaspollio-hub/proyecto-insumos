@@ -105,9 +105,11 @@ const auth = {
 
   async logout() {
     _clearTimers();
-    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
-    await storage.clearSession();
-    window.location.href = './login.html';
+    try { await fetch('/api/auth/logout', { method: 'POST' }); } catch { /* silencio */ }
+    try { await storage.clearSession(); } catch { /* silencio */ }
+    localStorage.removeItem('isumos_session');
+    sessionStorage.removeItem('isumos_token');
+    window.location.replace('./login.html');
   },
 
   async getSession() {

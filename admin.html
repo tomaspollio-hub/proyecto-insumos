@@ -671,27 +671,35 @@
       const file = document.getElementById('import-file').files[0];
       if (!file) { document.getElementById('import-result').textContent = 'Seleccioná un archivo CSV primero.'; return; }
       const btn = document.getElementById('btn-import');
+      const res = document.getElementById('import-result');
       btn.disabled = true; btn.textContent = 'Importando…';
-      const form = new FormData();
-      form.append('file', file);
-      const r    = await fetch('/api/products/import', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
-      const data = await r.json();
-      const res  = document.getElementById('import-result');
-      if (data.ok) {
-        res.style.color = 'var(--success)';
-        res.textContent = `✓ Creados: ${data.creados} · Actualizados: ${data.actualizados} · Errores: ${data.errores}`;
-        const [pr, prd] = await Promise.all([
-          fetch('/api/products',         { headers: { Authorization: `Bearer ${token}` } }),
-          fetch('/api/products/demanda', { headers: { Authorization: `Bearer ${token}` } }),
-        ]);
-        products = await pr.json();
-        demanda  = await prd.json();
-        render();
-      } else {
+      res.textContent = '';
+      try {
+        const form = new FormData();
+        form.append('file', file);
+        const r    = await fetch('/api/products/import', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
+        if (!r.ok) { throw new Error(`HTTP ${r.status}`); }
+        const data = await r.json();
+        if (data.ok) {
+          res.style.color = 'var(--success)';
+          res.textContent = `✓ Creados: ${data.creados} · Actualizados: ${data.actualizados} · Errores: ${data.errores}`;
+          const [pr, prd] = await Promise.all([
+            fetch('/api/products?admin=1', { headers: { Authorization: `Bearer ${token}` } }),
+            fetch('/api/products/demanda', { headers: { Authorization: `Bearer ${token}` } }),
+          ]);
+          products = await pr.json();
+          demanda  = await prd.json();
+          render();
+        } else {
+          res.style.color = 'var(--danger)';
+          res.textContent = `Error al importar: ${data.motivo ?? 'desconocido'}`;
+        }
+      } catch (err) {
         res.style.color = 'var(--danger)';
-        res.textContent = 'Error al importar.';
+        res.textContent = `Error de conexión: ${err.message}`;
+      } finally {
+        btn.disabled = false; btn.textContent = 'Importar';
       }
-      btn.disabled = false; btn.textContent = 'Importar';
     });
 
     document.getElementById('btn-img-bulk').addEventListener('click', async () => {
