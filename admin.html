@@ -106,9 +106,9 @@
 <body>
 
   <header class="header">
-    <div class="header__logo">
+    <a id="logo-link" href="#" class="header__logo" style="text-decoration:none">
       <img src="assets/img/logo-global.png" alt="Farmacias Global">
-    </div>
+    </a>
     <span class="header__title">/ Admin</span>
     <div class="header__sep"></div>
     <a href="./empresas.html" class="btn-back">Clientes</a>
@@ -321,6 +321,7 @@
       throw new Error('sin permiso');
     }
     document.getElementById('btn-logout').addEventListener('click', () => auth.logout());
+    document.getElementById('logo-link').href = session.rol === 'gerente' ? './gerente.html' : './deposito.html';
 
     // ── Cargar productos + demanda ──────────────────────────────
     const token = sessionStorage.getItem('isumos_token');

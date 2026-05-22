@@ -63,7 +63,7 @@
 </head>
 <body>
   <header class="header">
-    <img src="assets/img/logo-global.png" alt="Farmacias Global" style="height:42px">
+    <a id="logo-link" href="#" style="line-height:0"><img src="assets/img/logo-global.png" alt="Farmacias Global" style="height:42px"></a>
     <span class="header__title">/ Clientes</span>
     <div class="header__sep"></div>
     <a href="./ventas.html" class="btn-nav">← Ventas</a>
@@ -161,8 +161,10 @@
 
     const session = await auth.requireAuth();
     if (!session) throw new Error();
-    if (!['ventas','deposito'].includes(session.rol)) { window.location.href='./login.html'; throw new Error(); }
+    if (!['ventas','deposito','gerente'].includes(session.rol)) { window.location.href='./login.html'; throw new Error(); }
     document.getElementById('btn-logout').addEventListener('click', () => auth.logout());
+    const _home = { gerente:'./gerente.html', ventas:'./ventas.html', deposito:'./deposito.html' };
+    document.getElementById('logo-link').href = _home[session.rol] || './login.html';
 
     const token = sessionStorage.getItem('isumos_token');
     function authH() { return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }; }

@@ -114,7 +114,7 @@
 <body>
 
 <header class="header">
-  <img class="header__logo" src="assets/img/logo-global.png" alt="Farmacias Global" />
+  <a id="logo-link" href="#" style="line-height:0"><img class="header__logo" src="assets/img/logo-global.png" alt="Farmacias Global" /></a>
   <span class="header__title">Depósito</span>
   <span class="header__sep"></span>
   <div class="header__user">
@@ -180,6 +180,7 @@ if (!session || (session.rol !== 'deposito' && session.rol !== 'gerente')) {
 const token = sessionStorage.getItem('isumos_token');
 document.getElementById('header-user').textContent = session.usuario;
 document.getElementById('btn-logout').addEventListener('click', () => auth.logout());
+document.getElementById('logo-link').href = session.rol === 'gerente' ? './gerente.html' : './deposito.html';
 
 // ── Estado ────────────────────────────────────────────────────────────────────
 let modulo      = 'sucursales';   // 'sucursales' | 'clientes'
