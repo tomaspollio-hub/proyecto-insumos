@@ -278,6 +278,7 @@ def _apply_additive_migrations(db):
         "ALTER TABLE pedidos ADD COLUMN remito TEXT",
         "ALTER TABLE presupuestos ADD COLUMN remito TEXT",
         "ALTER TABLE presupuestos ADD COLUMN observaciones TEXT",
+        "ALTER TABLE presupuestos ADD COLUMN motivo_rechazo TEXT",
     ]:
         try:
             db.execute(stmt)
@@ -1234,8 +1235,8 @@ def rechazar_presupuesto(pid):
     motivo = data.get('motivo', '')
     db.execute("""
         UPDATE presupuestos SET estado='rechazado', fecha_respuesta=?,
-        notas_cliente=COALESCE(notas_cliente||' | ','') || ? WHERE id=?
-    """, (now, f'Rechazado: {motivo}' if motivo else 'Rechazado por el cliente', pid))
+        motivo_rechazo=? WHERE id=?
+    """, (now, motivo or None, pid))
     db.commit()
     _publish({'tipo': 'presupuesto_rechazado', 'presupuesto_id': pid,
               'empresa_nombre': p['empresa_nombre']})

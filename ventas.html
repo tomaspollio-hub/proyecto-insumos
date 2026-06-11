@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Ventas — Isumos</title>
   <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/components.css" />
   <link rel="stylesheet" href="css/reset.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -210,6 +211,18 @@
 
   <div id="toast"></div>
 
+  <!-- Confirm modal -->
+  <div id="confirm-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;display:none;align-items:center;justify-content:center;padding:var(--space-4)">
+    <div style="background:var(--surface);border-radius:var(--radius-lg);max-width:380px;width:100%;padding:var(--space-6)">
+      <div id="confirm-msg" style="font-size:var(--text-base);font-weight:600;margin-bottom:var(--space-2)"></div>
+      <div id="confirm-sub" style="font-size:var(--text-sm);color:var(--text-muted);margin-bottom:var(--space-5)"></div>
+      <div style="display:flex;gap:var(--space-3);justify-content:flex-end">
+        <button class="btn-secondary" id="confirm-cancel">Cancelar</button>
+        <button class="btn-primary" id="confirm-ok">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
   <a href="https://wa.me/5492994566662" target="_blank" rel="noopener" title="WhatsApp" class="wa-fab">
     <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="#fff"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
   </a>
@@ -325,7 +338,7 @@
       panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
       const canEdit   = ['solicitado','en_revision'].includes(p.estado);
-      const canSend   = p.estado !== 'presupuestado' && p.estado !== 'rechazado' && p.estado !== 'entregado';
+      const canSend   = ['solicitado','en_revision'].includes(p.estado);
       const canChange = ['aprobado','en_preparacion','despachado'].includes(p.estado);
 
       const emp = empresasMap[p.empresa_id] || {};
@@ -351,6 +364,7 @@
         </div>
 
         ${p.notas_cliente ? `<div class="client-notes"><strong>Observaciones del cliente</strong>${p.notas_cliente}</div>` : ''}
+        ${p.motivo_rechazo ? `<div class="client-notes" style="background:var(--danger-light);color:var(--danger)"><strong>Motivo de rechazo</strong>${p.motivo_rechazo}</div>` : ''}
 
         <table class="items-editor" id="items-table">
           <thead><tr>
@@ -476,12 +490,20 @@
       });
 
       document.getElementById('btn-enviar')?.addEventListener('click', async () => {
-        if (!confirm('¿Enviar el presupuesto al cliente?')) return;
+        const editedItems = getEditedItems(p.items);
+        if (!editedItems.some(i => i.precio_unitario != null)) {
+          showToast('Agregá al menos un precio antes de enviar'); return;
+        }
+        const ok = await showConfirm(
+          '¿Enviar presupuesto al cliente?',
+          'El cliente recibirá una notificación y podrá aprobarlo o rechazarlo.'
+        );
+        if (!ok) return;
         // Guardar primero si hay cambios
         await fetch(`/api/presupuestos/${pid}`, {
           method: 'PATCH', headers: authH(),
           body: JSON.stringify({
-            items: getEditedItems(p.items),
+            items: editedItems,
             condiciones: document.getElementById('field-condiciones').value,
             notas_ventas: document.getElementById('field-notas-ventas').value,
             validez_dias: parseInt(document.getElementById('field-validez').value)||15,
@@ -510,7 +532,8 @@
       const rows = document.querySelectorAll('#items-table tbody tr');
       return originalItems.map((item, idx) => {
         const row    = rows[idx];
-        const precio = parseFloat(row.querySelector('[data-field="precio_unitario"]').value) || null;
+        const rawP   = row.querySelector('[data-field="precio_unitario"]').value;
+        const precio = rawP !== '' ? parseFloat(rawP) : null;
         const dto    = parseFloat(row.querySelector('[data-field="descuento"]').value) || 0;
         const aliq   = parseFloat(row.querySelector('[data-field="alicuota_iva"]').value) ?? 21;
         const tiempo = row.querySelector('[data-field="tiempo_entrega"]').value;
@@ -677,6 +700,24 @@
     }
 
     // ── Helpers ───────────────────────────────────────────────
+    function showConfirm(msg, sub) {
+      return new Promise(resolve => {
+        document.getElementById('confirm-msg').textContent = msg;
+        document.getElementById('confirm-sub').textContent = sub || '';
+        const overlay = document.getElementById('confirm-overlay');
+        overlay.style.display = 'flex';
+        function onOk()     { cleanup(); resolve(true);  }
+        function onCancel() { cleanup(); resolve(false); }
+        function cleanup() {
+          overlay.style.display = 'none';
+          document.getElementById('confirm-ok').removeEventListener('click', onOk);
+          document.getElementById('confirm-cancel').removeEventListener('click', onCancel);
+        }
+        document.getElementById('confirm-ok').addEventListener('click', onOk);
+        document.getElementById('confirm-cancel').addEventListener('click', onCancel);
+      });
+    }
+
     function fmtDate(iso) {
       return new Date(iso).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
     }
