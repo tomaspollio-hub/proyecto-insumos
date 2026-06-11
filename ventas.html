@@ -373,6 +373,8 @@
           </button>
         </div>
 
+        ${renderProgressSteps(p.estado)}
+
         ${p.notas_cliente ? `<div class="client-notes"><strong>Observaciones del cliente</strong>${p.notas_cliente}</div>` : ''}
         ${p.motivo_rechazo ? `<div class="client-notes" style="background:var(--danger-light);color:var(--danger)"><strong>Motivo de rechazo</strong>${p.motivo_rechazo}</div>` : ''}
 
@@ -707,6 +709,38 @@
         }
       };
       es.onerror = () => { dot.style.background = 'var(--danger)'; es.close(); setTimeout(connectSSE, 5000); };
+    }
+
+    // ── Progress steps ────────────────────────────────────────
+    function renderProgressSteps(estado) {
+      const isRejected = estado === 'rechazado';
+      const steps = isRejected
+        ? ['solicitado', 'en_revision', 'presupuestado', 'rechazado']
+        : ['solicitado', 'en_revision', 'presupuestado', 'aprobado', 'en_preparacion', 'despachado', 'entregado'];
+      const LABELS = {
+        solicitado: 'Solicitado', en_revision: 'En revisión',
+        presupuestado: 'Enviado', aprobado: 'Aprobado',
+        rechazado: 'Rechazado', en_preparacion: 'Preparando',
+        despachado: 'Despachado', entregado: 'Entregado',
+      };
+      const currentIdx = steps.indexOf(estado);
+      const CHECK = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor" style="width:12px;height:12px"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>`;
+      const CROSS = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor" style="width:12px;height:12px"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>`;
+      let html = '<div class="presup-steps">';
+      steps.forEach((step, idx) => {
+        const isDone   = idx < currentIdx;
+        const isActive = idx === currentIdx;
+        const cls = isDone ? 'presup-step--done'
+          : isActive ? (step === 'rechazado' ? 'presup-step--rejected' : 'presup-step--active')
+          : '';
+        const dot = isDone ? CHECK
+          : step === 'rechazado' ? CROSS
+          : `<span style="font-size:10px;font-weight:700">${idx + 1}</span>`;
+        html += `<div class="presup-step ${cls}"><div class="presup-step__dot">${dot}</div><div class="presup-step__label">${LABELS[step]}</div></div>`;
+        if (idx < steps.length - 1)
+          html += `<div class="presup-step-line ${isDone ? 'presup-step-line--done' : ''}"></div>`;
+      });
+      return html + '</div>';
     }
 
     // ── Helpers ───────────────────────────────────────────────
