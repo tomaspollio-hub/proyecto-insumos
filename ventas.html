@@ -151,7 +151,17 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     .spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; }
 
-    #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--text-primary); color: #fff; padding: 10px 20px; border-radius: 999px; font-size: 14px; z-index: 9999; display: none; }
+    #toast {
+      position: fixed; bottom: 24px; left: 50%;
+      transform: translateX(-50%) translateY(12px);
+      background: var(--text-primary); color: #fff;
+      padding: 10px 20px; border-radius: 999px;
+      font-size: var(--text-sm); font-weight: var(--font-medium);
+      z-index: 9999; opacity: 0; pointer-events: none;
+      box-shadow: var(--shadow-lg);
+      transition: opacity var(--transition-slow), transform var(--transition-slow);
+    }
+    #toast.toast--visible { opacity: 1; transform: translateX(-50%) translateY(0); }
   </style>
 </head>
 <body>
@@ -726,8 +736,10 @@
     }
     function showToast(msg) {
       const t = document.getElementById('toast');
-      t.textContent = msg; t.style.display = 'block';
-      clearTimeout(t._t); t._t = setTimeout(() => { t.style.display = 'none'; }, 4000);
+      t.textContent = msg;
+      t.classList.add('toast--visible');
+      clearTimeout(t._t);
+      t._t = setTimeout(() => t.classList.remove('toast--visible'), 4000);
     }
 
     load();

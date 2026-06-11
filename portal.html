@@ -171,7 +171,17 @@
     .estado-badge--entregado      { background: var(--success-light);color: var(--success); }
 
     /* ── Toast ── */
-    #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--text-primary); color: #fff; padding: 10px 20px; border-radius: 999px; font-size: 14px; z-index: 9999; display: none; }
+    #toast {
+      position: fixed; bottom: 24px; left: 50%;
+      transform: translateX(-50%) translateY(12px);
+      background: var(--text-primary); color: #fff;
+      padding: 10px 20px; border-radius: 999px;
+      font-size: var(--text-sm); font-weight: var(--font-medium);
+      z-index: 9999; opacity: 0; pointer-events: none;
+      box-shadow: var(--shadow-lg);
+      transition: opacity var(--transition-slow), transform var(--transition-slow);
+    }
+    #toast.toast--visible { opacity: 1; transform: translateX(-50%) translateY(0); }
 
     @media (max-width: 768px) {
       .cart-panel { display: flex; }
@@ -471,6 +481,18 @@
       renderCart();
     }
 
+    function changeQty(sku, delta) {
+      const item = cartItems.find(i => i.sku === sku);
+      if (!item) return;
+      const prod = products.find(x => x.sku_interno === sku);
+      const min  = prod?.multiplo_minimo || 1;
+      const newQty = Math.max(min, item.qty + delta);
+      if (newQty === item.qty) return;
+      item.qty = newQty;
+      saveCart();
+      renderCart();
+    }
+
     async function saveCart() {
       await fetch('/api/presupuestos/carrito', {
         method: 'PUT', headers: authH(), body: JSON.stringify({ items: cartItems }),
@@ -493,16 +515,33 @@
         return;
       }
       itemsEl.innerHTML = cartItems.map(i => `
-        <div class="cart-item">
-          <div style="flex:1">
+        <div class="cart-item" style="padding:var(--space-3) var(--space-5)">
+          <div class="cart-item__info">
             <div class="cart-item__name">${i.nombre}</div>
-            <div class="cart-item__qty">${i.qty} ${i.unidad_pedido || ''} · ${i.tiempo_entrega}</div>
+            <div class="cart-item__meta">${i.presentacion || ''} · ${i.tiempo_entrega}</div>
+            <div class="cart-item__controls">
+              <button class="btn-qty" data-sku="${i.sku}" data-action="minus" title="Reducir">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14"/></svg>
+              </button>
+              <span class="cart-item__qty">${i.qty}</span>
+              <button class="btn-qty" data-sku="${i.sku}" data-action="plus" title="Aumentar">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+              </button>
+              <span class="cart-item__unit">${i.unidad_pedido || ''}</span>
+            </div>
           </div>
-          <button class="btn-remove" data-sku="${i.sku}" title="Quitar">
+          <button class="btn-item-remove" data-sku="${i.sku}" title="Quitar del pedido">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
           </button>
         </div>`).join('');
-      itemsEl.querySelectorAll('.btn-remove').forEach(btn => {
+      itemsEl.querySelectorAll('.btn-qty').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const prod = products.find(x => x.sku_interno === btn.dataset.sku);
+          const step = prod?.multiplo_minimo || 1;
+          changeQty(btn.dataset.sku, btn.dataset.action === 'plus' ? step : -step);
+        });
+      });
+      itemsEl.querySelectorAll('.btn-item-remove').forEach(btn => {
         btn.addEventListener('click', () => removeFromCart(btn.dataset.sku));
       });
     }
@@ -774,9 +813,10 @@
     }
     function showToast(msg) {
       const t = document.getElementById('toast');
-      t.textContent = msg; t.style.display = 'block';
+      t.textContent = msg;
+      t.classList.add('toast--visible');
       clearTimeout(t._timer);
-      t._timer = setTimeout(() => { t.style.display = 'none'; }, 4000);
+      t._timer = setTimeout(() => t.classList.remove('toast--visible'), 4000);
     }
   </script>
 </body>

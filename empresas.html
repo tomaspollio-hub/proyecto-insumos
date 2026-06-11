@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Clientes — Isumos</title>
   <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/components.css" />
   <link rel="stylesheet" href="css/reset.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -209,7 +210,6 @@
           </div>
         </div>`).join('');
 
-      el.querySelectorAll('.btn-edit').forEach(btn => openEditModal(btn.dataset.id));
       el.querySelectorAll('.btn-edit').forEach(btn => {
         btn.addEventListener('click', () => openEditModal(btn.dataset.id));
       });
