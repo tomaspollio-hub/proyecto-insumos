@@ -140,6 +140,21 @@
     .btn-approve:hover { filter: brightness(.9); }
     .btn-reject  { padding: var(--space-3) var(--space-6); background: none; color: var(--danger); border: 1px solid var(--danger); border-radius: var(--radius); font-size: var(--text-sm); font-weight: 600; cursor: pointer; }
     .btn-reject:hover { background: var(--danger-light); }
+    .btn-negociar { padding: var(--space-3) var(--space-6); background: none; color: var(--warning); border: 1px solid var(--warning); border-radius: var(--radius); font-size: var(--text-sm); font-weight: 600; cursor: pointer; }
+    .btn-negociar:hover { background: var(--warning-light); }
+
+    .presup-total-banner { display: flex; align-items: center; justify-content: space-between; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-3) var(--space-4); margin-bottom: var(--space-5); }
+    .presup-total-banner__label { font-size: var(--text-sm); color: var(--text-muted); }
+    .presup-total-banner__val { font-size: var(--text-xl); font-weight: var(--font-bold); }
+
+    .approval-banner { display: flex; align-items: flex-start; gap: var(--space-3); background: var(--success-light); border: 1px solid var(--success); border-radius: var(--radius); padding: var(--space-4); margin-bottom: var(--space-5); }
+    .negociacion-banner { background: var(--warning-light); border: 1px solid var(--warning); border-radius: var(--radius); padding: var(--space-4); margin-bottom: var(--space-5); font-size: var(--text-sm); }
+
+    .estado-badge--en_negociacion { background: var(--warning-light); color: var(--warning); }
+
+    @media (max-width: 768px) {
+      .presup-actions { position: sticky; bottom: 0; background: var(--surface); border-top: 1px solid var(--border); margin: 0 calc(var(--space-5) * -1); padding: var(--space-4) var(--space-5); z-index: 10; }
+    }
 
     /* ── Comentarios portal ── */
     .section-sep { border: none; border-top: 1px solid var(--border); margin: var(--space-5) 0; }
@@ -272,6 +287,22 @@
       <div class="presup-actions">
         <button class="btn-reject" id="reject-confirm">Confirmar rechazo</button>
         <button class="btn-logout" id="reject-cancel" style="cursor:pointer">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal solicitar cambios -->
+  <div class="modal-overlay" id="negociar-overlay">
+    <div class="modal" style="max-width:420px">
+      <button class="modal__close" id="negociar-close">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+      </button>
+      <div class="modal__name" style="font-size:var(--text-lg);margin-bottom:var(--space-2)">Solicitar cambios</div>
+      <p class="modal__desc">Indicá qué cambios necesitás en el presupuesto. El equipo de ventas recibirá tu pedido.</p>
+      <textarea class="notes-input" id="negociar-motivo" placeholder="Ej: necesito ajustar la cantidad de un producto, revisar el precio de…" rows="3" style="margin-bottom:var(--space-4)"></textarea>
+      <div class="presup-actions">
+        <button class="btn-negociar" id="negociar-confirm">Enviar solicitud</button>
+        <button class="btn-logout" id="negociar-cancel" style="cursor:pointer">Cancelar</button>
       </div>
     </div>
   </div>
@@ -568,8 +599,36 @@
     renderCart();
 
     // ── Modal rechazar ────────────────────────────────────────
-    let pendingRejectPid = null;
-    const rejectOverlay  = document.getElementById('reject-overlay');
+    let pendingRejectPid    = null;
+    let pendingNegociarPid  = null;
+    const rejectOverlay     = document.getElementById('reject-overlay');
+    const negociarOverlay   = document.getElementById('negociar-overlay');
+
+    function openNegociarModal(pid) {
+      pendingNegociarPid = pid;
+      document.getElementById('negociar-motivo').value = '';
+      negociarOverlay.classList.add('open');
+      document.getElementById('negociar-motivo').focus();
+    }
+    document.getElementById('negociar-close').addEventListener('click',  () => negociarOverlay.classList.remove('open'));
+    document.getElementById('negociar-cancel').addEventListener('click', () => negociarOverlay.classList.remove('open'));
+    document.getElementById('negociar-confirm').addEventListener('click', async () => {
+      if (!pendingNegociarPid) return;
+      const motivo = document.getElementById('negociar-motivo').value.trim();
+      const btn    = document.getElementById('negociar-confirm');
+      btn.disabled = true; btn.textContent = 'Enviando…';
+      await fetch(`/api/presupuestos/${pendingNegociarPid}/negociar`, {
+        method: 'POST',
+        headers: { ...authH(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ motivo }),
+      });
+      negociarOverlay.classList.remove('open');
+      await loadPresupuestos();
+      renderPresupDetail(pendingNegociarPid);
+      showToast('Solicitud de cambios enviada al equipo de ventas');
+      btn.disabled = false; btn.textContent = 'Enviar solicitud';
+      pendingNegociarPid = null;
+    });
 
     function openRejectModal(pid) {
       pendingRejectPid = pid;
@@ -600,9 +659,9 @@
 
     const ESTADO_LABELS = {
       solicitado: 'Solicitado', en_revision: 'En revisión',
-      presupuestado: 'Presupuesto listo', aprobado: 'Aprobado',
-      rechazado: 'Rechazado', en_preparacion: 'En preparación',
-      despachado: 'Despachado', entregado: 'Entregado',
+      presupuestado: 'Presupuesto listo', en_negociacion: 'En negociación',
+      aprobado: 'Aprobado', rechazado: 'Rechazado',
+      en_preparacion: 'En preparación', despachado: 'Despachado', entregado: 'Entregado',
     };
 
     async function loadPresupuestos() {
@@ -624,9 +683,9 @@
       if (!el) return;
       const HLABELS = {
         solicitado: 'Pedido solicitado', en_revision: 'En revisión por ventas',
-        presupuestado: 'Presupuesto enviado', aprobado: 'Aprobado',
-        rechazado: 'Rechazado', en_preparacion: 'En preparación',
-        despachado: 'Despachado', entregado: 'Entregado',
+        presupuestado: 'Presupuesto enviado', en_negociacion: 'Cambios solicitados',
+        aprobado: 'Aprobado', rechazado: 'Rechazado',
+        en_preparacion: 'En preparación', despachado: 'Despachado', entregado: 'Entregado',
       };
       try {
         const res   = await fetch(`/api/presupuestos/${pid}/historial`, { headers: authH() });
@@ -650,15 +709,18 @@
     }
 
     function renderProgressSteps(estado) {
-      const isRejected = estado === 'rechazado';
+      const isRejected   = estado === 'rechazado';
+      const isNegociando = estado === 'en_negociacion';
       const steps = isRejected
         ? ['solicitado', 'en_revision', 'presupuestado', 'rechazado']
+        : isNegociando
+        ? ['solicitado', 'en_revision', 'presupuestado', 'en_negociacion', 'aprobado', 'en_preparacion', 'despachado', 'entregado']
         : ['solicitado', 'en_revision', 'presupuestado', 'aprobado', 'en_preparacion', 'despachado', 'entregado'];
       const LABELS = {
         solicitado: 'Solicitado', en_revision: 'En revisión',
-        presupuestado: 'Listo para revisar', aprobado: 'Aprobado',
-        rechazado: 'Rechazado', en_preparacion: 'Preparando',
-        despachado: 'Despachado', entregado: 'Entregado',
+        presupuestado: 'Listo para revisar', en_negociacion: 'En negociación',
+        aprobado: 'Aprobado', rechazado: 'Rechazado',
+        en_preparacion: 'Preparando', despachado: 'Despachado', entregado: 'Entregado',
       };
       const currentIdx = steps.indexOf(estado);
       const CHECK = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor" style="width:12px;height:12px"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>`;
@@ -727,9 +789,14 @@
           <div class="presup-detail__meta">
             Solicitado el ${fmtDate(p.fecha_solicitud)}
             ${p.fecha_envio ? ` · Recibido el ${fmtDate(p.fecha_envio)}` : ''}
-            ${p.validez_dias ? ` · Válido por ${p.validez_dias} días` : ''}
+            ${p.validez_dias ? ` · Válido hasta ${p.fecha_envio ? calcVenc(p.fecha_envio, p.validez_dias) : p.validez_dias + ' días'}` : ''}
           </div>
           ${renderProgressSteps(p.estado)}
+          ${hasPrecios ? `
+          <div class="presup-total-banner">
+            <span class="presup-total-banner__label">Total estimado</span>
+            <span class="presup-total-banner__val">$${fmt(p.items.reduce((s,i)=>s+(i.subtotal||0),0))}</span>
+          </div>` : ''}
           <table class="items-table">
             <thead><tr>
               <th>Producto</th><th>Cant.</th><th>Entrega</th>
@@ -757,10 +824,25 @@
           </table>
           ${p.condiciones ? `<div class="presup-conditions"><strong style="display:block;font-size:var(--text-xs);text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);margin-bottom:4px">Condiciones</strong>${p.condiciones}</div>` : ''}
           ${p.notas_cliente ? `<div class="presup-conditions"><strong style="display:block;font-size:var(--text-xs);text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);margin-bottom:4px">Tus observaciones</strong>${p.notas_cliente}</div>` : ''}
+          ${p.remito ? `<div class="presup-conditions"><strong style="display:block;font-size:var(--text-xs);text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);margin-bottom:4px">Número de remito</strong># ${p.remito}</div>` : ''}
           ${p.estado === 'presupuestado' ? `
           <div class="presup-actions">
             <button class="btn-approve" id="btn-aprobar">Aprobar presupuesto</button>
             <button class="btn-reject"  id="btn-rechazar">Rechazar</button>
+            <button class="btn-negociar" id="btn-negociar">Solicitar cambios</button>
+          </div>` : ''}
+          ${p.estado === 'en_negociacion' ? `
+          <div class="negociacion-banner">
+            <strong>Cambios solicitados al equipo de ventas</strong>
+            <p style="margin:4px 0 0">Estamos revisando tus observaciones. Te notificaremos cuando el presupuesto sea actualizado.</p>
+          </div>` : ''}
+          ${p.estado === 'aprobado' ? `
+          <div class="approval-banner">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:24px;height:24px;color:var(--success);flex-shrink:0;margin-top:2px"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+            <div>
+              <strong style="color:var(--success)">Presupuesto aprobado</strong>
+              <p style="margin:4px 0 0;font-size:var(--text-sm)">El equipo está preparando tu pedido. Te notificaremos cuando esté listo para despachar.</p>
+            </div>
           </div>` : ''}
 
           <hr class="section-sep">
@@ -790,6 +872,7 @@
         showToast('Presupuesto aprobado');
       });
       document.getElementById('btn-rechazar')?.addEventListener('click', () => openRejectModal(pid));
+      document.getElementById('btn-negociar')?.addEventListener('click', () => openNegociarModal(pid));
 
       // Cargar historial, adjuntos y comentarios
       loadPortalHistorial(pid);
@@ -872,6 +955,13 @@
     connectSSE();
 
     // ── Helpers ───────────────────────────────────────────────
+    function calcVenc(fechaEnvio, dias) {
+      if (!fechaEnvio || !dias) return null;
+      const d = new Date(fechaEnvio);
+      d.setDate(d.getDate() + Number(dias));
+      return d.toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' });
+    }
+
     function fmtDate(iso) {
       return new Date(iso).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
     }

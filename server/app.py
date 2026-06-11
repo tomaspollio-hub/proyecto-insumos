@@ -279,11 +279,52 @@ def _apply_additive_migrations(db):
         "ALTER TABLE presupuestos ADD COLUMN remito TEXT",
         "ALTER TABLE presupuestos ADD COLUMN observaciones TEXT",
         "ALTER TABLE presupuestos ADD COLUMN motivo_rechazo TEXT",
+        "ALTER TABLE presupuestos ADD COLUMN notas_negociacion TEXT",
     ]:
         try:
             db.execute(stmt)
         except Exception:
             pass
+
+    # ── Ampliar CHECK constraint de presupuestos.estado ────────
+    schema = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='presupuestos'").fetchone()
+    if schema and 'en_negociacion' not in schema['sql']:
+        db.executescript("""
+            PRAGMA foreign_keys=OFF;
+            CREATE TABLE presupuestos_rebuild (
+                id               TEXT PRIMARY KEY,
+                empresa_id       TEXT NOT NULL,
+                empresa_nombre   TEXT NOT NULL,
+                usuario_cliente  TEXT NOT NULL,
+                usuario_ventas   TEXT,
+                fecha_solicitud  TEXT NOT NULL,
+                fecha_envio      TEXT,
+                fecha_respuesta  TEXT,
+                estado           TEXT NOT NULL DEFAULT 'solicitado'
+                                 CHECK(estado IN (
+                                     'solicitado','en_revision','presupuestado','en_negociacion',
+                                     'aprobado','rechazado','en_preparacion','despachado','entregado'
+                                 )),
+                validez_dias     INTEGER DEFAULT 15,
+                condiciones      TEXT,
+                notas_cliente    TEXT,
+                notas_ventas     TEXT,
+                items            TEXT NOT NULL DEFAULT '[]',
+                remito           TEXT,
+                observaciones    TEXT,
+                motivo_rechazo   TEXT,
+                notas_negociacion TEXT
+            );
+            INSERT INTO presupuestos_rebuild
+                SELECT id, empresa_id, empresa_nombre, usuario_cliente, usuario_ventas,
+                       fecha_solicitud, fecha_envio, fecha_respuesta, estado, validez_dias,
+                       condiciones, notas_cliente, notas_ventas, items,
+                       remito, observaciones, motivo_rechazo, notas_negociacion
+                FROM presupuestos;
+            DROP TABLE presupuestos;
+            ALTER TABLE presupuestos_rebuild RENAME TO presupuestos;
+            PRAGMA foreign_keys=ON;
+        """)
 
     # ── Tabla historial de estados de presupuestos ──────────
     try:
@@ -423,7 +464,7 @@ def init_db():
             fecha_respuesta  TEXT,
             estado           TEXT NOT NULL DEFAULT 'solicitado'
                              CHECK(estado IN (
-                                 'solicitado','en_revision','presupuestado',
+                                 'solicitado','en_revision','presupuestado','en_negociacion',
                                  'aprobado','rechazado','en_preparacion',
                                  'despachado','entregado'
                              )),
@@ -1229,6 +1270,37 @@ def enviar_presupuesto(pid):
                     _mail_presupuesto_enviado(p))
     return jsonify({'ok': True})
 
+@app.post('/api/presupuestos/<pid>/negociar')
+@require_auth(roles=['cliente'])
+def negociar_presupuesto(pid):
+    session = g.session
+    data    = request.get_json(silent=True) or {}
+    db      = get_db()
+    row     = db.execute('SELECT * FROM presupuestos WHERE id=?', (pid,)).fetchone()
+    if not row:
+        return jsonify({'ok': False, 'motivo': 'not_found'}), 404
+    p = dict(row)
+    if p['empresa_id'] != session.get('empresa_id'):
+        return jsonify({'ok': False, 'motivo': 'sin_permiso'}), 403
+    if p['estado'] != 'presupuestado':
+        return jsonify({'ok': False, 'motivo': 'estado_invalido'}), 400
+
+    now    = datetime.now(timezone.utc).isoformat()
+    motivo = data.get('motivo', '')
+    db.execute("""
+        UPDATE presupuestos SET estado='en_negociacion', notas_negociacion=? WHERE id=?
+    """, (motivo or None, pid))
+    _log_historial(db, pid, 'en_negociacion', session['usuario'])
+    db.commit()
+    _publish({'tipo': 'presupuesto_negociacion', 'presupuesto_id': pid,
+              'empresa_nombre': p['empresa_nombre']})
+    _send_email(MAIL_USER,
+                f'[Isumos] Solicitud de cambios — {p["empresa_nombre"]}',
+                f'<p>El cliente <strong>{session["usuario"]}</strong> de {p["empresa_nombre"]} solicita cambios en el presupuesto.</p>'
+                f'<p><strong>Motivo:</strong> {motivo or "(sin especificar)"}</p>')
+    return jsonify({'ok': True})
+
+
 @app.post('/api/presupuestos/<pid>/aprobar')
 @require_auth(roles=['cliente'])
 def aprobar_presupuesto(pid):
@@ -1335,7 +1407,7 @@ def sse_events():
             return True
         if rol == 'ventas':
             return tipo in ('nuevo_presupuesto','presupuesto_aprobado','presupuesto_rechazado',
-                            'nuevo_comentario') and event.get('para') in ('ventas', None)
+                            'presupuesto_negociacion','nuevo_comentario') and event.get('para') in ('ventas', None)
         if rol == 'cliente':
             return ((tipo in ('presupuesto_enviado','presupuesto_actualizado','nuevo_adjunto') and
                      event.get('empresa_id') == eid) or
