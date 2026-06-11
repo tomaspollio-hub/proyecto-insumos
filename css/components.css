@@ -1134,3 +1134,24 @@
 .presup-step--rejected .presup-step__label {
   color: var(--danger); font-weight: var(--font-semibold);
 }
+
+/* ── Timeline ─────────────────────────────────────────────── */
+.timeline { display: flex; flex-direction: column; }
+.timeline-item {
+  display: flex; gap: var(--space-3); position: relative;
+  padding-bottom: var(--space-3);
+}
+.timeline-item:not(:last-child)::before {
+  content: ''; position: absolute; left: 7px; top: 20px;
+  width: 2px; height: calc(100% - 8px); background: var(--border);
+}
+.timeline-dot {
+  width: 16px; height: 16px; border-radius: var(--radius-full);
+  background: var(--bg-subtle); border: 2px solid var(--border);
+  flex-shrink: 0; margin-top: 3px; z-index: 1;
+}
+.timeline-dot--done     { background: var(--success); border-color: var(--success); }
+.timeline-dot--active   { background: var(--accent);  border-color: var(--accent);  }
+.timeline-dot--rejected { background: var(--danger);  border-color: var(--danger);  }
+.timeline-label { font-size: var(--text-sm); font-weight: 500; color: var(--text-primary); }
+.timeline-meta  { font-size: var(--text-xs); color: var(--text-muted); margin-top: 2px; }

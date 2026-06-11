@@ -86,7 +86,20 @@
         <div class="stat-card"><div class="stat-card__label">Pedidos internos hoy</div><div class="stat-card__val" id="s-pedidos">—</div></div>
         <div class="stat-card"><div class="stat-card__label">Pedidos pendientes depósito</div><div class="stat-card__val" id="s-pendientes">—</div></div>
         <div class="stat-card"><div class="stat-card__label">Presupuestos nuevos</div><div class="stat-card__val" id="s-nuevos">—</div></div>
-        <div class="stat-card"><div class="stat-card__label">Presupuestos aprobados este mes</div><div class="stat-card__val" id="s-aprobados">—</div></div>
+        <div class="stat-card"><div class="stat-card__label">Aprobados este mes</div><div class="stat-card__val" id="s-aprobados">—</div></div>
+        <div class="stat-card"><div class="stat-card__label">Facturado este mes</div><div class="stat-card__val" id="s-facturado" style="font-size:var(--text-xl)">—</div></div>
+        <div class="stat-card"><div class="stat-card__label">Tasa de conversión</div><div class="stat-card__val" id="s-conversion">—</div></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-6);margin-bottom:var(--space-8)">
+        <div>
+          <h2 style="font-size:var(--text-base);font-weight:700;margin-bottom:var(--space-4)">Pipeline activo</h2>
+          <div id="pipeline-chart"><span class="spinner"></span></div>
+        </div>
+        <div>
+          <h2 style="font-size:var(--text-base);font-weight:700;margin-bottom:var(--space-4)">Top clientes</h2>
+          <div id="top-clientes"><span class="spinner"></span></div>
+        </div>
       </div>
 
       <h2 style="font-size:var(--text-base);font-weight:700;margin-bottom:var(--space-4)">Últimos pedidos internos</h2>
@@ -164,6 +177,71 @@
       document.getElementById('s-nuevos').textContent     = presupR.filter(p => p.estado === 'solicitado').length;
       document.getElementById('s-aprobados').textContent  = presupR.filter(p => p.estado === 'aprobado' && p.fecha_solicitud?.startsWith(mes)).length;
 
+      // Total facturado este mes (aprobado + en_preparacion + despachado + entregado)
+      const presupFacturados = presupR.filter(p =>
+        ['aprobado','en_preparacion','despachado','entregado'].includes(p.estado) &&
+        p.fecha_solicitud?.startsWith(mes)
+      );
+      const totalFact = presupFacturados.reduce((sum, p) =>
+        sum + p.items.reduce((s, i) => s + (i.subtotal || 0), 0), 0
+      );
+      document.getElementById('s-facturado').textContent = totalFact ? '$' + fmt(totalFact) : '—';
+
+      // Tasa de conversión este mes
+      const resp = presupR.filter(p =>
+        ['aprobado','rechazado'].includes(p.estado) && p.fecha_solicitud?.startsWith(mes)
+      );
+      const conv = resp.length
+        ? Math.round(resp.filter(p => p.estado === 'aprobado').length / resp.length * 100)
+        : null;
+      document.getElementById('s-conversion').textContent = conv !== null ? conv + '%' : '—';
+
+      // Pipeline activo
+      const PIPE_STATES = ['solicitado', 'en_revision', 'presupuestado', 'aprobado', 'en_preparacion'];
+      const pipeline = Object.fromEntries(PIPE_STATES.map(s => [s, 0]));
+      presupR.forEach(p => { if (pipeline[p.estado] !== undefined) pipeline[p.estado]++; });
+      const maxP = Math.max(1, ...Object.values(pipeline));
+      document.getElementById('pipeline-chart').innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:var(--space-3)">
+          ${PIPE_STATES.map(s => {
+            const n   = pipeline[s];
+            const pct = Math.round(n / maxP * 100);
+            return `<div style="display:grid;grid-template-columns:140px 1fr 28px;align-items:center;gap:var(--space-3)">
+              <span style="font-size:var(--text-sm);color:var(--text-secondary)">${ESTADO_LABELS_P[s]}</span>
+              <div style="height:8px;border-radius:4px;background:var(--bg-subtle);overflow:hidden">
+                <div style="width:${pct}%;height:100%;background:var(--accent);border-radius:4px"></div>
+              </div>
+              <span style="font-size:var(--text-sm);font-weight:600;text-align:right">${n}</span>
+            </div>`;
+          }).join('')}
+        </div>`;
+
+      // Top clientes
+      const clienteMap = {};
+      presupR.forEach(p => {
+        if (!clienteMap[p.empresa_nombre]) clienteMap[p.empresa_nombre] = { total: 0, aprobados: 0, facturado: 0 };
+        clienteMap[p.empresa_nombre].total++;
+        if (['aprobado','en_preparacion','despachado','entregado'].includes(p.estado)) {
+          clienteMap[p.empresa_nombre].aprobados++;
+          clienteMap[p.empresa_nombre].facturado += p.items.reduce((s, i) => s + (i.subtotal || 0), 0);
+        }
+      });
+      const topClientes = Object.entries(clienteMap)
+        .sort((a, b) => b[1].total - a[1].total)
+        .slice(0, 5);
+      document.getElementById('top-clientes').innerHTML = topClientes.length
+        ? `<table class="resumen-table"><thead><tr>
+              <th>Empresa</th><th>Presupuestos</th><th>Aprobados</th><th>Facturado</th>
+           </tr></thead><tbody>
+             ${topClientes.map(([nombre, d]) => `<tr>
+               <td>${nombre}</td>
+               <td>${d.total}</td>
+               <td>${d.aprobados}</td>
+               <td>${d.facturado ? '$' + fmt(d.facturado) : '—'}</td>
+             </tr>`).join('')}
+           </tbody></table>`
+        : '<div class="empty">Sin datos aún.</div>';
+
       // Últimos pedidos internos
       const ultPedidos = pedidosR.slice(0, 8);
       document.getElementById('tabla-pedidos').innerHTML = ultPedidos.length
@@ -223,6 +301,10 @@
     function fmtDate(iso) {
       if (!iso) return '—';
       return new Date(iso).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    }
+
+    function fmt(n) {
+      return Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
     loadResumen();

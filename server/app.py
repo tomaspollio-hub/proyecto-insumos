@@ -285,6 +285,20 @@ def _apply_additive_migrations(db):
         except Exception:
             pass
 
+    # ── Tabla historial de estados de presupuestos ──────────
+    try:
+        db.executescript("""
+            CREATE TABLE IF NOT EXISTS presupuesto_historial (
+                id             TEXT PRIMARY KEY,
+                presupuesto_id TEXT NOT NULL,
+                estado         TEXT NOT NULL,
+                usuario        TEXT,
+                fecha          TEXT NOT NULL
+            );
+        """)
+    except Exception:
+        pass
+
     # ── Columnas nuevas en productos ────────────────────────────────
     for stmt in [
         "ALTER TABLE productos ADD COLUMN tiempo_entrega_stock TEXT DEFAULT '24-48 hs'",
@@ -1095,6 +1109,14 @@ def list_presupuestos():
     rows   = db.execute(query, params).fetchall()
     return jsonify([_row_to_presupuesto(r) for r in rows])
 
+def _log_historial(db, pid, estado, usuario):
+    now = datetime.now(timezone.utc).isoformat()
+    db.execute(
+        'INSERT INTO presupuesto_historial (id, presupuesto_id, estado, usuario, fecha) VALUES (?,?,?,?,?)',
+        (str(uuid.uuid4()), pid, estado, usuario, now)
+    )
+
+
 @app.post('/api/presupuestos')
 @require_auth(roles=['cliente'])
 def create_presupuesto():
@@ -1113,6 +1135,7 @@ def create_presupuesto():
         VALUES (?,?,?,?,?,?,?,?)
     """, (pid, session['empresa_id'], session['sucursal'], session['usuario'],
           now, 'solicitado', data.get('notas_cliente',''), json.dumps(items)))
+    _log_historial(db, pid, 'solicitado', session['usuario'])
 
     # Limpiar carrito del cliente
     db.execute("""
@@ -1140,6 +1163,17 @@ def get_presupuesto(pid):
         return jsonify({'ok': False, 'motivo': 'sin_permiso'}), 403
     return jsonify(p)
 
+@app.get('/api/presupuestos/<pid>/historial')
+@require_auth(roles=['cliente', 'ventas', 'deposito', 'gerente'])
+def get_presupuesto_historial(pid):
+    db   = get_db()
+    rows = db.execute(
+        'SELECT * FROM presupuesto_historial WHERE presupuesto_id=? ORDER BY fecha ASC',
+        (pid,)
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
 @app.patch('/api/presupuestos/<pid>')
 @require_auth(roles=['ventas', 'deposito', 'gerente'])
 def update_presupuesto(pid):
@@ -1166,6 +1200,8 @@ def update_presupuesto(pid):
 
     set_clause = ', '.join(f'{k}=?' for k in updates)
     db.execute(f'UPDATE presupuestos SET {set_clause} WHERE id=?', [*updates.values(), pid])
+    if updates.get('estado') == 'en_revision':
+        _log_historial(db, pid, 'en_revision', g.session['usuario'])
     db.commit()
     return jsonify({'ok': True})
 
@@ -1180,6 +1216,7 @@ def enviar_presupuesto(pid):
 
     now = datetime.now(timezone.utc).isoformat()
     db.execute("UPDATE presupuestos SET estado='presupuestado', fecha_envio=? WHERE id=?", (now, pid))
+    _log_historial(db, pid, 'presupuestado', g.session['usuario'])
     db.commit()
 
     p = dict(row)
@@ -1208,6 +1245,7 @@ def aprobar_presupuesto(pid):
 
     now = datetime.now(timezone.utc).isoformat()
     db.execute("UPDATE presupuestos SET estado='aprobado', fecha_respuesta=? WHERE id=?", (now, pid))
+    _log_historial(db, pid, 'aprobado', session['usuario'])
     db.commit()
     _publish({'tipo': 'presupuesto_aprobado', 'presupuesto_id': pid,
               'empresa_nombre': p['empresa_nombre']})
@@ -1237,6 +1275,7 @@ def rechazar_presupuesto(pid):
         UPDATE presupuestos SET estado='rechazado', fecha_respuesta=?,
         motivo_rechazo=? WHERE id=?
     """, (now, motivo or None, pid))
+    _log_historial(db, pid, 'rechazado', session['usuario'])
     db.commit()
     _publish({'tipo': 'presupuesto_rechazado', 'presupuesto_id': pid,
               'empresa_nombre': p['empresa_nombre']})
@@ -1263,6 +1302,7 @@ def update_presupuesto_estado(pid):
             updates[field] = data[field]
     set_clause = ', '.join(f'{k}=?' for k in updates)
     db.execute(f'UPDATE presupuestos SET {set_clause} WHERE id=?', [*updates.values(), pid])
+    _log_historial(db, pid, estado, g.session['usuario'])
     db.commit()
     p = dict(row)
     _publish({'tipo': 'presupuesto_actualizado', 'presupuesto_id': pid,
