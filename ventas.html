@@ -152,6 +152,22 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     .spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; }
 
+    @keyframes panel-in {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes dialog-in {
+      from { opacity: 0; transform: scale(.95) translateY(8px); }
+      to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    .confirm-dialog { animation: dialog-in .2s cubic-bezier(.32,1,.23,1) both; }
+    .detail-panel[style*="block"], .detail-panel:not([style*="none"]) { animation: panel-in .25s ease-out; }
+
+    @media (max-width: 900px) {
+      .items-editor { min-width: 660px; }
+      .detail-panel { overflow-x: auto; }
+    }
+
     #toast {
       position: fixed; bottom: 24px; left: 50%;
       transform: translateX(-50%) translateY(12px);
@@ -224,7 +240,7 @@
 
   <!-- Confirm modal -->
   <div id="confirm-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;display:none;align-items:center;justify-content:center;padding:var(--space-4)">
-    <div style="background:var(--surface);border-radius:var(--radius-lg);max-width:380px;width:100%;padding:var(--space-6)">
+    <div class="confirm-dialog" style="background:var(--surface);border-radius:var(--radius-lg);max-width:380px;width:100%;padding:var(--space-6)">
       <div id="confirm-msg" style="font-size:var(--text-base);font-weight:600;margin-bottom:var(--space-2)"></div>
       <div id="confirm-sub" style="font-size:var(--text-sm);color:var(--text-muted);margin-bottom:var(--space-5)"></div>
       <div style="display:flex;gap:var(--space-3);justify-content:flex-end">
@@ -520,6 +536,8 @@
           'El cliente recibirá una notificación y podrá aprobarlo o rechazarlo.'
         );
         if (!ok) return;
+        const btn = document.getElementById('btn-enviar');
+        btn.disabled = true; btn.textContent = 'Enviando…';
         // Guardar primero si hay cambios
         await fetch(`/api/presupuestos/${pid}`, {
           method: 'PATCH', headers: authH(),
@@ -540,6 +558,8 @@
       document.getElementById('estado-select')?.addEventListener('change', async e => {
         const estado = e.target.value;
         if (!estado) return;
+        const sel = e.target;
+        sel.disabled = true;
         await fetch(`/api/presupuestos/${pid}/estado`, {
           method: 'PATCH', headers: authH(), body: JSON.stringify({ estado }),
         });

@@ -154,7 +154,38 @@
 
     @media (max-width: 768px) {
       .presup-actions { position: sticky; bottom: 0; background: var(--surface); border-top: 1px solid var(--border); margin: 0 calc(var(--space-5) * -1); padding: var(--space-4) var(--space-5); z-index: 10; }
+      .modal-overlay { align-items: flex-end; padding: 0; }
+      .modal { max-width: 100%; border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+      .modal-overlay.open .modal { animation: sheet-in var(--transition-slow) cubic-bezier(.32,1,.23,1) both; }
     }
+
+    /* ── Animaciones ──────────────────────────────────────── */
+    @keyframes modal-in {
+      from { opacity: 0; transform: scale(.96) translateY(10px); }
+      to   { opacity: 1; transform: scale(1)   translateY(0);    }
+    }
+    @keyframes sheet-in {
+      from { transform: translateY(100%); }
+      to   { transform: translateY(0); }
+    }
+    @keyframes badge-bounce {
+      0%, 100% { transform: scale(1); }
+      35%       { transform: scale(1.45); }
+      65%       { transform: scale(.9); }
+    }
+    @keyframes badge-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(234,179,8,.35); }
+      60%       { box-shadow: 0 0 0 6px rgba(234,179,8,0); }
+    }
+    @keyframes confetti-fall {
+      0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(80px) rotate(220deg); opacity: 0; }
+    }
+
+    .modal-overlay.open .modal { animation: modal-in var(--transition-slow) cubic-bezier(.32,1,.23,1) both; }
+    .cart-count.bounce { animation: badge-bounce .4s ease-out; }
+    .estado-badge--presupuestado { animation: badge-pulse 2.5s ease-in-out infinite; }
+    .table-scroll-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: var(--space-5); }
 
     /* ── Comentarios portal ── */
     .section-sep { border: none; border-top: 1px solid var(--border); margin: var(--space-5) 0; }
@@ -503,6 +534,10 @@
       }
       saveCart();
       renderCart();
+      const badge = document.getElementById('cart-count');
+      badge.classList.remove('bounce');
+      void badge.offsetWidth;
+      badge.classList.add('bounce');
       showToast(`${p.nombre} agregado al pedido`);
     }
 
@@ -797,6 +832,7 @@
             <span class="presup-total-banner__label">Total estimado</span>
             <span class="presup-total-banner__val">$${fmt(p.items.reduce((s,i)=>s+(i.subtotal||0),0))}</span>
           </div>` : ''}
+          <div class="table-scroll-wrap">
           <table class="items-table">
             <thead><tr>
               <th>Producto</th><th>Cant.</th><th>Entrega</th>
@@ -822,6 +858,7 @@
               </tr>
             </tfoot>` : ''}
           </table>
+          </div>
           ${p.condiciones ? `<div class="presup-conditions"><strong style="display:block;font-size:var(--text-xs);text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);margin-bottom:4px">Condiciones</strong>${p.condiciones}</div>` : ''}
           ${p.notas_cliente ? `<div class="presup-conditions"><strong style="display:block;font-size:var(--text-xs);text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);margin-bottom:4px">Tus observaciones</strong>${p.notas_cliente}</div>` : ''}
           ${p.remito ? `<div class="presup-conditions"><strong style="display:block;font-size:var(--text-xs);text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);margin-bottom:4px">Número de remito</strong># ${p.remito}</div>` : ''}
@@ -870,6 +907,7 @@
         await loadPresupuestos();
         renderPresupDetail(pid);
         showToast('Presupuesto aprobado');
+        showConfetti();
       });
       document.getElementById('btn-rechazar')?.addEventListener('click', () => openRejectModal(pid));
       document.getElementById('btn-negociar')?.addEventListener('click', () => openNegociarModal(pid));
@@ -955,6 +993,20 @@
     connectSSE();
 
     // ── Helpers ───────────────────────────────────────────────
+    function showConfetti() {
+      const COLORS = ['#22c55e','#86efac','#4ade80','#fde68a','#60a5fa'];
+      for (let i = 0; i < 35; i++) {
+        const el = document.createElement('div');
+        const size = 6 + Math.random() * 6;
+        el.style.cssText = `position:fixed;width:${size}px;height:${size}px;border-radius:50%;
+          background:${COLORS[i%COLORS.length]};pointer-events:none;z-index:9999;
+          left:${20 + Math.random()*60}vw;top:${10 + Math.random()*25}vh;
+          animation:confetti-fall ${.6+Math.random()*.5}s ease-out ${Math.random()*.4}s both`;
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 1400);
+      }
+    }
+
     function calcVenc(fechaEnvio, dias) {
       if (!fechaEnvio || !dias) return null;
       const d = new Date(fechaEnvio);
